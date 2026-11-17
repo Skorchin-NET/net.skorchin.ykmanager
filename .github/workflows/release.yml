@@ -138,7 +138,7 @@ jobs:
           echo "dir=dist" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: YKManager-v${{ steps.meta.outputs.version_name }}-release
           path: dist/

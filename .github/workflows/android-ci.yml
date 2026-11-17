@@ -79,7 +79,7 @@ jobs:
         run: ./gradlew :app:assembleRelease --no-daemon
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: YKManager-v${{ steps.meta.outputs.version_name }}-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
@@ -87,7 +87,7 @@ jobs:
           retention-days: 14
 
       - name: Upload test reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: unit-test-reports
