@@ -9,7 +9,10 @@ import com.yubico.yubikit.android.transport.nfc.NfcYubiKeyDevice
 import com.yubico.yubikit.management.Capability
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,6 +95,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private val _copiedInBackground = Channel<String>(Channel.BUFFERED)
+    /**
+     * Emits a confirmation when a tap that reached the app through an NFC intent (the app
+     * was not in front) was copied to the clipboard; the activity then shows it as a system
+     * toast and returns the user to the app they were using.
+     */
+    val copiedInBackground: Flow<String> = _copiedInBackground.receiveAsFlow()
+
     /** The configurable behaviour for a tap that nothing was waiting for. */
     private suspend fun handleIdleTap(device: NfcYubiKeyDevice, intentNdef: ByteArray?): Boolean {
         val app = getApplication<Application>()
@@ -106,7 +117,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 when (settings.nfcTapAction.value) {
                     NfcTapAction.COPY_OTP -> {
                         copy(app, content.otp)
-                        core.toast("One-time password copied to the clipboard")
+                        val what = if (content.staticPassword != null) "Static password" else "One-time password"
+                        if (intentNdef != null) _copiedInBackground.trySend("$what copied to the clipboard")
+                        else core.toast("$what copied to the clipboard")
                     }
                     NfcTapAction.OPEN_LINK -> {
                         if (!content.isUri) throw UserFacingException("The NDEF record is text, not a link: ${content.value}")

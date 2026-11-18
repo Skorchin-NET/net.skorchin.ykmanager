@@ -67,6 +67,22 @@
             </intent-filter>
         </activity>
 
+        <!-- NDEF text records (text mode / static password) when the tap action is
+             "copy" or "show" the OTP. Disabled by default; AppSettings.syncNfcTextHandler()
+             enables it so Android hands the tap to the app instead of showing its own
+             "New tag scanned" box with the raw keyboard scan codes. -->
+        <activity-alias
+            android:name=".NdefTextTap"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Passkey provider (Android 14+): Settings > Passwords, passkeys & accounts. -->
         <service
             android:name=".passkey.YubiKeyPasskeyService"

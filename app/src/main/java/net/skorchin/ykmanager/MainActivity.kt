@@ -4,7 +4,13 @@ import android.content.Intent
 import android.nfc.NdefMessage
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.nfc.tech.IsoDep
 import android.os.Bundle
+import android.widget.Toast
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 import androidx.core.content.IntentCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +31,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             YkManagerTheme {
                 AppRoot(vm)
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // The tap arrived while another app was in front and the setting is "copy":
+                // confirm with a system toast and go back to where the user was.
+                vm.copiedInBackground.collect { msg ->
+                    Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
+                    moveTaskToBack(true)
+                }
             }
         }
         handleNfcIntent(intent)
@@ -49,6 +65,8 @@ class MainActivity : ComponentActivity() {
         if (action != NfcAdapter.ACTION_NDEF_DISCOVERED && action != NfcAdapter.ACTION_TECH_DISCOVERED &&
             action != NfcAdapter.ACTION_TAG_DISCOVERED) return
         val tag = IntentCompat.getParcelableExtra(intent, NfcAdapter.EXTRA_TAG, Tag::class.java) ?: return
+        // The text-record filter also matches ordinary NFC stickers; a YubiKey is always ISO-DEP.
+        if (IsoDep::class.java.name !in tag.techList) { intent.action = null; return }
         val ndef = IntentCompat.getParcelableArrayExtra(intent, NfcAdapter.EXTRA_NDEF_MESSAGES, NdefMessage::class.java)
             ?.firstOrNull()?.let { (it as? NdefMessage)?.toByteArray() }
         intent.action = null // handle once

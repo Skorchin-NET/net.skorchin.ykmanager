@@ -2,6 +2,17 @@
 
 Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`.
 
+## v2.33 (versionCode 35)
+
+- NFC tap set to "Copy" or "Show the NDEF one-time password": a key whose NDEF output is a text
+  record (text mode or a static password) no longer brings up Android's "New tag scanned" box
+  with raw keyboard scan codes when YK Manager isn't in front. The tap now goes to YK Manager,
+  which decodes it
+- Copy: the password is copied, a short confirmation appears, and you return to the app you were
+  using. Show: YK Manager opens with the decoded password
+- Ordinary (non-YubiKey) NFC text stickers are ignored, and with any other tap action text tags are
+  left to Android as before
+
 ## v2.32 (versionCode 34)
 
 Maintenance release: code quality and dependency updates, no feature changes.

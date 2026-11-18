@@ -1,6 +1,8 @@
 package net.skorchin.ykmanager.yubi
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +20,7 @@ enum class NfcTapAction(val label: String, val description: String) {
     ),
     COPY_OTP(
         "Copy the NDEF one-time password",
-        "Read the key's NDEF record (the OTP it would type into a browser) and copy the one-time password to the clipboard.",
+        "Read the key's NDEF record (the OTP it would type into a browser) and copy the one-time password to the clipboard. Also works when another app is in front: YK Manager opens briefly, copies, and returns you to that app.",
     ),
     SHOW_OTP(
         "Show the NDEF one-time password",
@@ -36,6 +38,7 @@ enum class NfcTapAction(val label: String, val description: String) {
 
 /** Small persisted preferences store. */
 class AppSettings(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     private val _nfcTapAction = MutableStateFlow(
@@ -51,7 +54,27 @@ class AppSettings(context: Context) {
     fun setNfcTapAction(a: NfcTapAction) {
         _nfcTapAction.value = a
         prefs.edit { putString(KEY_NFC_TAP, a.name) }
+        syncNfcTextHandler()
     }
+
+    /**
+     * A YubiKey whose NDEF output is a text record (text mode, or a static password)
+     * matches no app, so when YK Manager is not in front Android shows its own
+     * "New tag scanned" box with the raw keyboard scan codes. While the tap action is
+     * to copy or show the OTP, register the app for NDEF text records (a disabled-by-
+     * default activity alias) so the tap is decoded here instead; otherwise leave
+     * text tags to the system.
+     */
+    fun syncNfcTextHandler() {
+        val on = _nfcTapAction.value == NfcTapAction.COPY_OTP || _nfcTapAction.value == NfcTapAction.SHOW_OTP
+        val state = if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        val pm = appContext.packageManager
+        val cn = ComponentName(appContext, NFC_TEXT_ALIAS)
+        if (pm.getComponentEnabledSetting(cn) != state)
+            runCatching { pm.setComponentEnabledSetting(cn, state, PackageManager.DONT_KILL_APP) }
+    }
+
+    init { syncNfcTextHandler() }
 
     fun setCopyOnShow(v: Boolean) {
         _copyOnShow.value = v
@@ -72,6 +95,8 @@ class AppSettings(context: Context) {
     }
 
     companion object {
+        /** Activity alias in the manifest that receives NDEF text-record taps. */
+        const val NFC_TEXT_ALIAS = "net.skorchin.ykmanager.NdefTextTap"
         private const val KEY_NFC_TAP = "nfc_tap_action"
         private const val KEY_COPY_ON_SHOW = "nfc_copy_on_show"
         private const val KEY_OTP_OUTPUT = "otp_output_settings"
