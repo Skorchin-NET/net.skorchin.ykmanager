@@ -2,6 +2,15 @@
 
 Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`.
 
+## v2.34 (versionCode 36)
+
+- OTP slots → Read over NFC: fixed "Failed to read the NFC (NDEF) output. NDEF data missing or
+  invalid". The button relied on the NDEF message Android caches during its own tag check, which
+  the app turns off so Android doesn't open the OTP link itself. It now reads the tag directly,
+  like the OTP decoder and Show NFC output already do
+- Static passwords read this way are decoded from keyboard scan codes before the slot type is
+  identified
+
 ## v2.33 (versionCode 35)
 
 - NFC tap set to "Copy" or "Show the NDEF one-time password": a key whose NDEF output is a text

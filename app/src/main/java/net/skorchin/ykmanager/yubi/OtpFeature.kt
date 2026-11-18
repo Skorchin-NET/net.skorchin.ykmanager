@@ -213,10 +213,17 @@ class OtpFeature(private val core: YubiKeyCore, context: Context) {
     /** Over NFC, read the NDEF message, which carries the output of the NDEF slot. */
     fun identifyViaNdef(ndefSlot: Slot) {
         core.run("read the NFC (NDEF) output") { device ->
-            val nfc = device as? NfcYubiKeyDevice
-                ?: throw UserFacingException("Reading NDEF output requires an NFC tap.")
-            val raw = nfc.readNdef()
-            val text = parseNdefPayload(raw)
+            if (device !is NfcYubiKeyDevice) throw UserFacingException("Reading NDEF output requires an NFC tap.")
+            // Read the tag over ISO-DEP ourselves. YubiKit's readNdef() only returns the message
+            // Android cached during its own NDEF check, which reader mode skips on purpose
+            // (skipNdefCheck), so it always failed with "NDEF data missing or invalid".
+            val content = try {
+                core.smartCard(device) { NdefReader.read(it, knownNdefPrefixes()) }
+            } catch (e: Exception) {
+                if (e is UserFacingException) throw e
+                throw UserFacingException("Could not read the NDEF record: ${e.message}. Hold the key against the phone until it has been read.")
+            }
+            val text = content.otp
             val ident = classifyOutput(text, core.keyInfo.value?.serial)
                 ?: throw UserFacingException("The NDEF message did not contain an OTP.")
             identified[idKey(core.keyInfo.value?.serial, ndefSlot)] = ident.copy(
@@ -654,15 +661,6 @@ class OtpFeature(private val core: YubiKeyCore, context: Context) {
         }
 
         /** Extract the OTP from a YubiKey NDEF message (URI or text record). */
-        fun parseNdefPayload(raw: ByteArray): String {
-            val msg = android.nfc.NdefMessage(raw)
-            val rec = msg.records.firstOrNull() ?: return ""
-            val uri = runCatching { rec.toUri()?.toString() }.getOrNull()
-            val text = uri ?: String(rec.payload, Charsets.UTF_8).drop(3)
-            // The OTP is the trailing token after '#', '/', or '='.
-            return text.split('#', '/', '=', '?').last()
-        }
-
         fun formatTime(t: Long): String = DateFormat.getDateTimeInstance().format(Date(t))
     }
 }
