@@ -116,6 +116,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     ?: core.smartCard(device) { NdefReader.read(it, prefixes) }
                 when (settings.nfcTapAction.value) {
                     NfcTapAction.COPY_OTP -> {
+                        // Never put undecoded keyboard scan codes (control characters) on the clipboard.
+                        if (content.otp.isEmpty() || content.otp.any { it < ' ' || it == '\uFFFD' })
+                            throw UserFacingException("The NFC output could not be decoded as readable text, so nothing was " +
+                                "copied. Use OTP slots → Show NFC output to see the raw scan codes.")
                         copy(app, content.otp)
                         val what = if (content.staticPassword != null) "Static password" else "One-time password"
                         if (intentNdef != null) _copiedInBackground.trySend("$what copied to the clipboard")

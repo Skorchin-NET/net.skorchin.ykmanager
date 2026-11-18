@@ -75,4 +75,24 @@ class NdefReaderTest {
             "!@#\$%^&*()-_=+[]{}\\|;:'\",.<>/?`~ \t"
         assertEquals(all, NdefReader.parse(uri(yk + Encoding.passwordToScanCodes(all))).staticPassword)
     }
+
+    /** YubiKit pads static passwords to 38 bytes with 0x00; over NFC the padding is in the record. */
+    private fun padded(pw: String) = Encoding.passwordToScanCodes(pw).copyOf(38)
+
+    @Test fun zeroPaddedStaticPasswordInTextRecord() {
+        val c = NdefReader.parse(text(padded("Secret-Pass1")))
+        assertEquals("Secret-Pass1", c.staticPassword)
+        assertEquals("Secret-Pass1", c.otp)
+    }
+
+    @Test fun zeroPaddedStaticPasswordAfterDefaultUri() {
+        val c = NdefReader.parse(uri("my.yubico.com/yk/#".toByteArray() + padded("hunter2!")))
+        assertEquals("hunter2!", c.otp)
+        assertEquals("https://my.yubico.com/yk/#hunter2!", c.value)
+    }
+
+    @Test fun zeroPaddedStaticPasswordAfterKnownTextPrefix() {
+        val c = NdefReader.parse(text("pw:".toByteArray() + padded("Ab 3#=/")), listOf("pw:"))
+        assertEquals("Ab 3#=/", c.otp)
+    }
 }

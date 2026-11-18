@@ -142,7 +142,10 @@ object NdefReader {
      * cannot be found by looking for the first unprintable byte alone.
      */
     private fun content(prefix: String, body: ByteArray, isUri: Boolean, knownPrefixes: List<String>): NdefContent {
-        val full = prefix.toByteArray(Charsets.UTF_8) + body
+        // A static password is stored zero-padded to 38 bytes (YubiKit's StaticPasswordSlotConfiguration
+        // does this). Over USB the key types nothing for 0x00 ("no key"), but over NFC the padding is
+        // part of the record, and it would otherwise stop the bytes being recognised as scan codes.
+        val full = (prefix.toByteArray(Charsets.UTF_8) + body).dropLastWhile { it == 0.toByte() || it == 0x80.toByte() }.toByteArray()
         val start = knownSplit(full, knownPrefixes) ?: guessSplit(full)
             ?: return NdefContent(String(full, Charsets.UTF_8), isUri)
         val tail = full.copyOfRange(start, full.size)

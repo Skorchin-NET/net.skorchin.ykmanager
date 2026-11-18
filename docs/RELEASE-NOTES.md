@@ -2,6 +2,16 @@
 
 Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`.
 
+## v2.36 (versionCode 38)
+
+- Static passwords over NFC are now decoded to readable characters when copied (NFC tap → Copy),
+  shown (Show NFC output, NFC tap → Show) or read on the OTP slots screen. YubiKit stores static
+  passwords zero-padded to 38 bytes. Over USB the key types nothing for the padding, but over NFC
+  it is part of the record, so the bytes weren't recognised as scan codes and the raw codes were
+  copied
+- Copy never puts unreadable control characters on the clipboard; it reports the problem instead
+- Regression tests for padded passwords after the Yubico URI, a known text prefix and no prefix
+
 ## v2.35 (versionCode 37)
 
 - OTP slots → Read over NFC on the slot the NFC tag doesn't send: the key's NFC (NDEF) tag only
