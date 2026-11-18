@@ -56,6 +56,7 @@ private sealed interface SlotAction {
     data class UpdateOutput(val slot: Slot) : SlotAction
     data object Swap : SlotAction
     data object Ndef : SlotAction
+    data class ReadOtherViaNdef(val slot: Slot, val ndefSlot: Slot) : SlotAction
 }
 
 @Composable
@@ -79,6 +80,10 @@ fun SlotsScreen(vm: AppViewModel) {
 
         SectionCard {
             SectionTitle("Both slots")
+            Spacer(Modifier.height(4.dp))
+            val serial = info?.serial
+            Hint("NFC (NDEF) output sends slot ${vm.otp.ndefSlot(serial).num}" +
+                if (vm.otp.ndefSlotKnown(serial)) " (set in this app)" else " (assumed: factory default; the key can't report it)")
             Spacer(Modifier.height(6.dp))
             ButtonRow {
                 SmallButton("Swap slots") { action = SlotAction.Swap }
@@ -173,6 +178,16 @@ fun SlotsScreen(vm: AppViewModel) {
             vm.otp.setNdef(if (v.choice("slot") == 0) Slot.ONE else Slot.TWO, v.text("uri"), v.choice("type") == 1, v.text("acc")); null
         }
 
+        is SlotAction.ReadOtherViaNdef -> FormDialog("Read slot ${a.slot.num} over NFC", listOf(
+            Field.Note("The key's NFC tag only sends one slot, currently slot ${a.ndefSlot.num}" +
+                (if (vm.otp.ndefSlotKnown(info?.serial)) "" else " (assumed: factory default)") +
+                ". To read slot ${a.slot.num}, the NFC output is switched to it for this tap, keeping the same prefix and type."),
+            Field.Check("restore", "Switch NFC output back to slot ${a.ndefSlot.num} afterwards", true),
+            Field.Text("acc", "Access code (hex, if set)"),
+        ), "Read", onDismiss = { action = null }) { v ->
+            vm.otp.identifyViaNdef(a.slot, v.text("acc"), v.check("restore")); null
+        }
+
         null -> Unit
     }
 }
@@ -241,7 +256,11 @@ private fun SlotCard(vm: AppViewModel, v: SlotView, onAction: (SlotAction) -> Un
                 }
                 Spacer(Modifier.height(8.dp))
                 ButtonRow {
-                    if (keyboard && !vm.core.isUsb) SmallButton("Read over NFC") { vm.otp.identifyViaNdef(v.slot) }
+                    if (keyboard && !vm.core.isUsb) SmallButton("Read over NFC") {
+                        // The NFC tag only sends one slot; reading the other one needs a temporary switch.
+                        val ndef = vm.otp.ndefSlot(vm.core.keyInfo.value?.serial)
+                        if (ndef == v.slot) vm.otp.identifyViaNdef(v.slot) else onAction(SlotAction.ReadOtherViaNdef(v.slot, ndef))
+                    }
                     if (chalresp) SmallButton("Test challenge-response") { vm.otp.probeChallengeResponse(v.slot) }
                     if (v.type == SlotType.CHALRESP) SmallButton("Calculate HMAC") { onAction(SlotAction.Hmac(v.slot)) }
                     if (keyboard && !chalresp) SmallButton("Update settings") { onAction(SlotAction.UpdateOutput(v.slot)) }

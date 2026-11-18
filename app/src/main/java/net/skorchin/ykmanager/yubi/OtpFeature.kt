@@ -143,6 +143,24 @@ class OtpFeature(private val core: YubiKeyCore, context: Context) {
         ndefPrefs.edit { putStringSet("prefixes", set) }
     }
 
+    /**
+     * The slot the key's NFC (NDEF) tag sends. A YubiKey can't report this, so it is
+     * remembered per serial whenever this app sets it; until then it is assumed to be the
+     * factory default, slot 1.
+     */
+    fun ndefSlot(serial: Int?): Slot =
+        if (ndefPrefs.getString(ndefSlotKey(serial), null) == Slot.TWO.name) Slot.TWO else Slot.ONE
+
+    /** True when [ndefSlot] was set by this app rather than assumed. */
+    fun ndefSlotKnown(serial: Int?): Boolean = ndefPrefs.contains(ndefSlotKey(serial))
+
+    private fun rememberNdefSlot(serial: Int?, slot: Slot) {
+        ndefPrefs.edit { putString(ndefSlotKey(serial), slot.name) }
+        rebuild()
+    }
+
+    private fun ndefSlotKey(serial: Int?) = "slot_${serial ?: "unknown"}"
+
     /** Identification results gathered this session, keyed by serial + slot. */
     private val identified = mutableMapOf<String, Identification>()
 
@@ -210,26 +228,72 @@ class OtpFeature(private val core: YubiKeyCore, context: Context) {
         core.toast("Slot ${slot.num}: ${ident.type.label}")
     }
 
-    /** Over NFC, read the NDEF message, which carries the output of the NDEF slot. */
-    fun identifyViaNdef(ndefSlot: Slot) {
+    /**
+     * Over NFC, read the NDEF message, which carries the output of the NDEF slot only. For the
+     * other slot the NFC output is pointed at it for the read (same prefix and payload type,
+     * learned from a first read), then, if [restore], pointed back - all within one tap.
+     */
+    fun identifyViaNdef(slot: Slot, accessCodeHex: String = "", restore: Boolean = true) {
         core.run("read the NFC (NDEF) output") { device ->
             if (device !is NfcYubiKeyDevice) throw UserFacingException("Reading NDEF output requires an NFC tap.")
+            val serial = core.keyInfo.value?.serial
+            val current = ndefSlot(serial)
+            val acc = parseAccessCode(accessCodeHex)
             // Read the tag over ISO-DEP ourselves. YubiKit's readNdef() only returns the message
             // Android cached during its own NDEF check, which reader mode skips on purpose
             // (skipNdefCheck), so it always failed with "NDEF data missing or invalid".
+            var switched = false
             val content = try {
-                core.smartCard(device) { NdefReader.read(it, knownNdefPrefixes()) }
+                core.smartCard(device) { conn ->
+                    val first = NdefReader.read(conn, knownNdefPrefixes())
+                    if (slot == current) return@smartCard first
+                    val prefix = first.value.removeSuffix(first.otp)
+                    val asText = !first.isUri
+                    // A static password's start is only guessed unless the prefix is known; never
+                    // write back a prefix that might include part of the password.
+                    if (first.staticPassword != null && prefix !in knownNdefPrefixes() + NdefReader.DEFAULT_URI)
+                        throw UserFacingException("The NFC output (slot ${current.num}) is a static password with an unrecognised " +
+                            "prefix, so it can't be switched to slot ${slot.num} and back safely. Use NFC (NDEF) output to send slot ${slot.num}, then read again.")
+                    writeNdef(conn, slot, prefix, asText, acc)
+                    switched = true
+                    val other = NdefReader.read(conn, knownNdefPrefixes())
+                    if (restore) {
+                        writeNdef(conn, current, prefix, asText, acc)
+                        switched = false
+                    }
+                    other
+                }
             } catch (e: Exception) {
+                if (switched) rememberNdefSlot(serial, slot)
                 if (e is UserFacingException) throw e
-                throw UserFacingException("Could not read the NDEF record: ${e.message}. Hold the key against the phone until it has been read.")
+                val where = if (switched) " The NFC output now sends slot ${slot.num}; use NFC (NDEF) output to change it back." else ""
+                throw UserFacingException(when (e) {
+                    is com.yubico.yubikit.core.smartcard.ApduException ->
+                        "The key refused to change the NFC output (SW %04X). If the slot has an access code, enter it.".format(e.sw.toInt() and 0xffff) + where
+                    else -> "Could not read the NDEF record: ${e.message}. Hold the key against the phone until it has been read.$where"
+                })
             }
-            val text = content.otp
-            val ident = classifyOutput(text, core.keyInfo.value?.serial)
+            if (slot != current && !restore) rememberNdefSlot(serial, slot)
+            val ident = classifyOutput(content.otp, serial)
                 ?: throw UserFacingException("The NDEF message did not contain an OTP.")
-            identified[idKey(core.keyInfo.value?.serial, ndefSlot)] = ident.copy(
-                details = ident.details + ("NDEF payload" to text.take(80))
+            identified[idKey(serial, slot)] = ident.copy(
+                details = ident.details + ("NDEF payload" to content.otp.take(80))
             )
+            if (slot != current) core.toast(
+                if (restore) "Read slot ${slot.num} over NFC; NFC output is back on slot ${current.num}"
+                else "Read slot ${slot.num} over NFC; NFC output now sends slot ${slot.num}")
         }
+    }
+
+    /** Send the NDEF configuration command over the smart card OTP application. */
+    private fun writeNdef(conn: com.yubico.yubikit.core.smartcard.SmartCardConnection, slot: Slot,
+                          prefix: String, asText: Boolean, acc: ByteArray?) {
+        val data = buildNdefConfig(prefix.trim(), asText) + (acc ?: ByteArray(6))
+        val cmd = if (slot == Slot.ONE) 0x08 else 0x09
+        val p = com.yubico.yubikit.core.smartcard.SmartCardProtocol(conn)
+        p.select(com.yubico.yubikit.core.smartcard.AppId.OTP)
+        // Throws ApduException on any non-9000 status word; the body may be empty.
+        p.sendAndReceive(com.yubico.yubikit.core.smartcard.Apdu(0, 0x01, cmd, 0, data))
     }
 
     /** Read the NDEF record the key emits to phones and show it, without leaving the app. */
@@ -569,8 +633,6 @@ class OtpFeature(private val core: YubiKeyCore, context: Context) {
     fun setNdef(slot: Slot, prefix: String, asText: Boolean, accessCodeHex: String) {
         core.run("configure NFC output") { device ->
             val acc = parseAccessCode(accessCodeHex)
-            val data = buildNdefConfig(prefix.trim(), asText) + (acc ?: ByteArray(6))
-            val cmd: Byte = if (slot == Slot.ONE) 0x08 else 0x09
             val usb = device as? com.yubico.yubikit.android.transport.usb.UsbYubiKeyDevice
             if (usb != null && usb.supportsConnection(com.yubico.yubikit.core.otp.OtpConnection::class.java)) {
                 // Keyboard (HID) interface: YubiKit's own implementation is fine here.
@@ -582,13 +644,9 @@ class OtpFeature(private val core: YubiKeyCore, context: Context) {
                 if (asText) throw UserFacingException(
                     "Plain-text NDEF can only be written over NFC or the smart card interface. Tap the key over NFC instead.")
             } else {
-                core.smartCard(device) { c ->
-                    val p = com.yubico.yubikit.core.smartcard.SmartCardProtocol(c)
-                    p.select(com.yubico.yubikit.core.smartcard.AppId.OTP)
-                    // Throws ApduException on any non-9000 status word; the body may be empty.
-                    p.sendAndReceive(com.yubico.yubikit.core.smartcard.Apdu(0, 0x01, cmd.toInt(), 0, data))
-                }
+                core.smartCard(device) { c -> writeNdef(c, slot, prefix, asText, acc) }
             }
+            rememberNdefSlot(core.keyInfo.value?.serial, slot)
             rememberNdefPrefix(if (asText) prefix.trim() else prefix.trim().ifBlank { NdefReader.DEFAULT_URI })
             core.toast("NFC (NDEF) output now uses slot ${slot.num}" +
                 (if (asText) " as text" else "") + (if (prefix.isBlank()) "" else " with prefix \"${prefix.trim()}\""))

@@ -2,6 +2,18 @@
 
 Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`.
 
+## v2.35 (versionCode 37)
+
+- OTP slots → Read over NFC on the slot the NFC tag doesn't send: the key's NFC (NDEF) tag only
+  carries one slot (slot 1 by default), so reading slot 2 returned slot 1's OTP. The app now
+  switches the NFC output to that slot for the read, keeping the same prefix and type, and switches
+  it back, all in one tap. You can choose to leave it on the new slot, and enter an access code if
+  one is set
+- The app remembers which slot the NFC output sends, per key, and shows it on the OTP slots screen.
+  The key can't report this, so until it is set in the app it is assumed to be slot 1
+- A static password with an unrecognised prefix is never rewritten; the app asks you to set the NFC
+  output instead
+
 ## v2.34 (versionCode 36)
 
 - OTP slots → Read over NFC: fixed "Failed to read the NFC (NDEF) output. NDEF data missing or
