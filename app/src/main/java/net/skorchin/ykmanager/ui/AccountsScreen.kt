@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,6 +59,7 @@ private enum class AccDialog { ADD, URI, IMPORT, SET_PW, CHANGE_PW, REMOVE_PW, U
 @Composable
 fun AccountsScreen(vm: AppViewModel) {
     val st by vm.oath.state.collectAsStateWithLifecycle()
+    val favorites by vm.oath.favorites.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var dialog by remember { mutableStateOf<AccDialog?>(null) }
     var scannedUri by remember { mutableStateOf("") }
@@ -141,11 +143,13 @@ fun AccountsScreen(vm: AppViewModel) {
             )
             val shown = st.entries
                 .filter { filter.isBlank() || "${it.issuer} ${it.name}".contains(filter, ignoreCase = true) }
-                .sortedBy { (it.issuer ?: it.name).lowercase() }
+                .sortedWith(compareBy({ !vm.oath.isFavorite(st.deviceId, it, favorites) }, { (it.issuer ?: it.name).lowercase() }))
             if (shown.isEmpty()) Hint("No accounts yet. Scan a QR code from a website's two-factor setup page, or pick a screenshot of one, to add an account.")
             shown.forEach { e ->
                 AccountRow(
                     e, now,
+                    favorite = vm.oath.isFavorite(st.deviceId, e, favorites),
+                    onToggleFavorite = { vm.oath.toggleFavorite(e) },
                     onCalculate = { vm.oath.calculate(e) },
                     onCopy = { e.code?.value?.let { copyToClipboard(context, "Code", it) } },
                     onRename = { renameEntry = e },
@@ -286,7 +290,7 @@ fun AccountsScreen(vm: AppViewModel) {
 
 @Composable
 private fun AccountRow(
-    e: OathEntry, now: Long,
+    e: OathEntry, now: Long, favorite: Boolean, onToggleFavorite: () -> Unit,
     onCalculate: () -> Unit, onCopy: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -295,7 +299,13 @@ private fun AccountRow(
     Card(Modifier.fillMaxWidth().clickable { if (valid) onCopy() else onCalculate() }) {
         Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(e.issuer ?: e.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (favorite) {
+                        Icon(Icons.Filled.Star, "Pinned", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(e.issuer ?: e.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                }
                 if (e.issuer != null) Text(e.name, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(4.dp))
@@ -323,6 +333,8 @@ private fun AccountRow(
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More") }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text(if (favorite) "Unpin" else "Pin to top") },
+                        onClick = { menu = false; onToggleFavorite() })
                     DropdownMenuItem(text = { Text("Generate code") }, onClick = { menu = false; onCalculate() })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })

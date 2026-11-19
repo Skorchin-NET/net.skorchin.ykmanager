@@ -2,6 +2,23 @@
 
 Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`.
 
+## v2.37 (versionCode 39)
+
+- Full inventory (new screen): one read collects every application the key supports (device,
+  OTP slots, accounts, FIDO2/passkeys, PIV certificates, OpenPGP) into a single report. Print it
+  or save it as a PDF through Android's print dialog, or share it as text. It lists configuration
+  only, never secrets, PINs or codes
+- Passkeys → Security settings (firmware 5.4+): turn Always require user verification on or off,
+  raise the minimum PIN length (optionally shared with named websites) and force a PIN change
+- Certificates → Attest: proves a key was generated on the YubiKey (firmware 4.3+) and saves the
+  attestation certificate with the F9 intermediate as PEM
+- Certificates → Move key to another slot, with or without its certificate, and Delete the private
+  key only, keeping the certificate (firmware 5.7+)
+- Management key → Protect with PIN: stores a random management key on the YubiKey, unlocked by
+  the PIN, in the same format as ykman and Yubico Authenticator (legacy PIN-derived keys also work)
+- Accounts → Pin to top: pinned accounts are starred and listed first (stored on this phone)
+- Unit tests for the PIN-protected key objects and inventory rendering/escaping
+
 ## v2.36 (versionCode 38)
 
 - Static passwords over NFC are now decoded to readable characters when copied (NFC tap → Copy),

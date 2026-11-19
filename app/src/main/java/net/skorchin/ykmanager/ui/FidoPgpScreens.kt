@@ -35,7 +35,7 @@ import com.yubico.yubikit.openpgp.Uif
 // Passkeys (FIDO2)
 // ----------------------------------------------------------------------
 
-private enum class FidoDialog { SET_PIN, CHANGE_PIN, UNLOCK }
+private enum class FidoDialog { SET_PIN, CHANGE_PIN, UNLOCK, ALWAYS_UV, PIN_POLICY }
 
 @Composable
 fun PasskeysScreen(vm: AppViewModel) {
@@ -67,6 +67,22 @@ fun PasskeysScreen(vm: AppViewModel) {
             ButtonRow {
                 if (!st.pinSet) SmallButton("Set PIN") { dialog = FidoDialog.SET_PIN }
                 else SmallButton("Change PIN") { dialog = FidoDialog.CHANGE_PIN }
+            }
+        }
+
+        if (st.configSupported) SectionCard {
+            SectionTitle("Security settings")
+            Spacer(Modifier.height(4.dp))
+            InfoRow("Always require UV", if (st.alwaysUv == true) "on" else "off")
+            InfoRow("Minimum PIN length", st.minPinLength.toString())
+            InfoRow("Force PIN change", if (st.forcePinChange) "pending" else "off")
+            if (!st.pinSet) Hint("Set a FIDO2 PIN to change these settings.")
+            Spacer(Modifier.height(8.dp))
+            ButtonRow {
+                SmallButton(if (st.alwaysUv == true) "Turn off Always UV" else "Turn on Always UV", enabled = st.pinSet) {
+                    dialog = FidoDialog.ALWAYS_UV
+                }
+                SmallButton("PIN policy", enabled = st.pinSet) { dialog = FidoDialog.PIN_POLICY }
             }
         }
 
@@ -126,6 +142,45 @@ fun PasskeysScreen(vm: AppViewModel) {
             "Unlock", onDismiss = { dialog = null },
         ) { v -> vm.fido.unlock(v.chars("pin")); null }
 
+        FidoDialog.ALWAYS_UV -> {
+            val enable = st.alwaysUv != true
+            FormDialog(
+                if (enable) "Turn on Always UV?" else "Turn off Always UV?",
+                listOf(
+                    Field.Note(
+                        if (enable) "Every FIDO sign-in, including security-key (U2F) use, will require the PIN or a fingerprint. " +
+                            "Some older services that only support U2F may stop working."
+                        else "Websites can again choose whether to ask for the PIN."
+                    ),
+                    Field.Text("pin", "FIDO2 PIN", secret = true),
+                ),
+                if (enable) "Turn on" else "Turn off", onDismiss = { dialog = null },
+            ) { v ->
+                if (v.text("pin").isEmpty()) return@FormDialog "Enter the PIN"
+                vm.fido.setAlwaysUv(v.chars("pin"), enable); null
+            }
+        }
+
+        FidoDialog.PIN_POLICY -> FormDialog(
+            "FIDO2 PIN policy",
+            listOfNotNull(
+                Field.Note("The minimum PIN length can only be raised. Only a FIDO reset lowers it again."),
+                Field.Text("min", "Minimum PIN length (currently ${st.minPinLength})", st.minPinLength.toString(), numeric = true),
+                if (st.maxMinPinRpIds > 0) Field.Text("rp", "Websites allowed to read it (optional)",
+                    supporting = "Comma-separated RP IDs, e.g. login.example.com (max ${st.maxMinPinRpIds})") else null,
+                Field.Check("force", "Require a PIN change before next use", st.forcePinChange),
+                Field.Text("pin", "Current FIDO2 PIN", secret = true),
+            ),
+            "Apply", onDismiss = { dialog = null },
+        ) { v ->
+            val min = v.int("min", -1)
+            if (min < st.minPinLength || min > 63) return@FormDialog "Minimum length must be ${st.minPinLength}–63"
+            if (v.text("pin").isEmpty()) return@FormDialog "Enter the PIN"
+            val rps = v.text("rp").split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            if (min == st.minPinLength && rps.isEmpty() && !v.check("force")) return@FormDialog "Nothing to change"
+            vm.fido.setPinPolicy(v.chars("pin"), min.takeIf { it != st.minPinLength }, rps, v.check("force")); null
+        }
+
         null -> Unit
     }
     selected?.let { p ->
@@ -153,14 +208,14 @@ private fun passkeySummary(p: Passkey): String {
 
 private enum class PgpDialog { USER_PIN, ADMIN_PIN, RESET_CODE, UNBLOCK_RC, UNBLOCK_ADMIN, RETRIES }
 
-private fun keyRefName(r: KeyRef) = when (r) {
+internal fun keyRefName(r: KeyRef) = when (r) {
     KeyRef.SIG -> "Signature"
     KeyRef.DEC -> "Encryption"
     KeyRef.AUT -> "Authentication"
     KeyRef.ATT -> "Attestation"
 }
 
-private fun uifName(u: Uif?) = when (u) {
+internal fun uifName(u: Uif?) = when (u) {
     null -> "not supported"
     Uif.OFF -> "off"
     Uif.ON -> "on"

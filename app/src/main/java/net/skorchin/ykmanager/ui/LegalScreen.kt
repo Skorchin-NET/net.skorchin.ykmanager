@@ -81,9 +81,10 @@ object LegalText {
             "governed by their own licenses, which are reproduced there and which take precedence for those components.",
 
         "7. Privacy" to
-            "The App does not collect, transmit or store any personal data. The only data kept on your device is a local " +
-            "history of the OTP slot configurations you program, which you can clear at any time. See the Privacy Policy on " +
-            "the store listing for details.",
+            "The App does not collect or transmit any personal data. It keeps only local data on your device: the history " +
+            "of OTP slot configurations you program, the accounts you pin and, if you choose, a remembered OATH password " +
+            "key. Uninstalling the App removes it. Reports you print or share go only where you send them. See the Privacy " +
+            "Policy on the store listing for details.",
 
         "8. Changes" to
             "These Terms may be updated with a new version of the App. If the Terms change materially you will be asked to " +

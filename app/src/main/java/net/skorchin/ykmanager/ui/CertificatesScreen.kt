@@ -47,6 +47,7 @@ fun CertificatesScreen(vm: AppViewModel) {
     var importFor by remember { mutableStateOf<Slot?>(null) }
     var importBytes by remember { mutableStateOf<Pair<String, ByteArray>?>(null) }
     var deleteFor by remember { mutableStateOf<PivSlotView?>(null) }
+    var moveFor by remember { mutableStateOf<PivSlotView?>(null) }
     var showRetired by remember { mutableStateOf(vm.piv.showRetired) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -72,8 +73,9 @@ fun CertificatesScreen(vm: AppViewModel) {
             st.puk?.let { InfoRow("PUK", "${it.attemptsRemaining}/${it.totalAttempts} tries" + if (it.isDefaultValue) " · DEFAULT" else "") }
             st.managementKey?.let {
                 InfoRow("Management key", it.keyType.name + (if (it.isDefaultValue) " · DEFAULT" else "") +
-                    if (it.touchPolicy != TouchPolicy.NEVER && it.touchPolicy != TouchPolicy.DEFAULT) " · touch" else "")
-            }
+                    (if (it.touchPolicy != TouchPolicy.NEVER && it.touchPolicy != TouchPolicy.DEFAULT) " · touch" else "") +
+                    if (st.pinUnlocksMgmtKey) " · protected by PIN" else "")
+            } ?: run { if (st.pinUnlocksMgmtKey) InfoRow("Management key", "protected by PIN") }
             if (st.pin?.isDefaultValue == true || st.managementKey?.isDefaultValue == true) {
                 Text("Default credentials are in use. Change them to protect your keys.",
                     color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -102,13 +104,24 @@ fun CertificatesScreen(vm: AppViewModel) {
                 onImport = { importFor = v.slot; picker.launch(arrayOf("*/*")) },
                 onExport = { vm.piv.exportCertificate(v) },
                 onDelete = { deleteFor = v },
+                onAttest = if (st.canAttest && !v.isEmpty && v.metadata?.isGenerated != false) {
+                    { vm.piv.attest(v.slot) }
+                } else null,
+                onMove = if (st.canMoveKey && v.metadata != null) { { moveFor = v } } else null,
             )
         }
     }
 
     // Dialogs ---------------------------------------------------------------
-    val mgmtField = Field.Text("mk", "Management key (hex)", PivFeature.DEFAULT_MGMT_KEY,
-        supporting = "Pre-filled with the factory default key")
+    val mgmtField = if (st.pinUnlocksMgmtKey) {
+        Field.Text("mk", "Management key (hex)", "", supporting = "Leave blank to unlock it with the PIN")
+    } else {
+        Field.Text("mk", "Management key (hex)", PivFeature.DEFAULT_MGMT_KEY,
+            supporting = "Pre-filled with the factory default key")
+    }
+    /** Extra fields for dialogs that don't already ask for the PIN. */
+    val mgmtFields = listOfNotNull(mgmtField, if (st.pinUnlocksMgmtKey) Field.Text("pin", "PIN", secret = true) else null)
+    fun FormValues.pinOrNull(): CharArray? = text("pin").takeIf { it.isNotEmpty() }?.toCharArray()
 
     when (dialog) {
         PivDialog.CHANGE_PIN -> FormDialog("Change PIN", listOf(
@@ -129,16 +142,25 @@ fun CertificatesScreen(vm: AppViewModel) {
         PivDialog.MGMT_KEY -> {
             val types = listOf(ManagementKeyType.AES192, ManagementKeyType.TDES, ManagementKeyType.AES128, ManagementKeyType.AES256)
             FormDialog("Change management key", listOf(
-                Field.Text("cur", "Current management key (hex)", PivFeature.DEFAULT_MGMT_KEY),
+                if (st.pinUnlocksMgmtKey) Field.Text("cur", "Current management key (hex)", "",
+                    supporting = "Leave blank to unlock it with the PIN")
+                else Field.Text("cur", "Current management key (hex)", PivFeature.DEFAULT_MGMT_KEY),
                 Field.Choice("t", "New key type", types.map { it.name }),
                 Field.Check("gen", "Generate a random key", true),
                 Field.Text("new", "New key (hex, if not generating)"),
                 Field.Check("touch", "Require touch to use the management key"),
-                Field.Note("AES192 is the default on firmware 5.7+. Older keys may only support TDES."),
+                Field.Check("protect", "Protect with PIN: store the key on the YubiKey, unlocked by the PIN", st.pinUnlocksMgmtKey),
+                Field.Text("pin", "PIN (needed to protect the key, or if it is protected now)", secret = true),
+                Field.Note("AES192 is the default on firmware 5.7+. Older keys may only support TDES. " +
+                    "A PIN-protected key works the same way in ykman and Yubico Authenticator."),
             ), "Change", onDismiss = { dialog = null }) { v ->
                 if (!v.check("gen") && v.text("new").isBlank()) return@FormDialog "Enter a new key or choose Generate"
+                if ((v.check("protect") || (st.pinUnlocksMgmtKey && v.text("cur").isBlank())) && v.text("pin").isEmpty()) {
+                    return@FormDialog "Enter the PIN"
+                }
                 vm.piv.changeManagementKey(v.text("cur"), types[v.choice("t")],
-                    if (v.check("gen")) null else v.text("new"), v.check("touch")); null
+                    if (v.check("gen")) null else v.text("new"), v.check("touch"),
+                    protectWithPin = v.check("protect"), pin = v.pinOrNull()); null
             }
         }
         PivDialog.RETRIES -> FormDialog("PIN and PUK retry counts", listOf(
@@ -180,25 +202,56 @@ fun CertificatesScreen(vm: AppViewModel) {
             Field.Text("pw", "File password (if any)", secret = true),
             Field.Choice("pp", "PIN policy (private key)", PIN_POLICIES.map(::policyLabel)),
             Field.Choice("tp", "Touch policy (private key)", TOUCH_POLICIES.map(::policyLabel)),
-            mgmtField,
-        ), "Import", onDismiss = { importFor = null; importBytes = null }) { v ->
+        ) + mgmtFields, "Import", onDismiss = { importFor = null; importBytes = null }) { v ->
             vm.piv.import(slot, file.second, v.text("pw").takeIf { it.isNotEmpty() }?.toCharArray(),
-                PIN_POLICIES[v.choice("pp")], TOUCH_POLICIES[v.choice("tp")], v.text("mk")); null
+                PIN_POLICIES[v.choice("pp")], TOUCH_POLICIES[v.choice("tp")], v.text("mk"), v.pinOrNull()); null
         }
     }
 
     deleteFor?.let { v ->
-        FormDialog("Delete ${PivFeature.slotName(v.slot)}?", listOf(
-            Field.Check("key", "Also delete the private key (firmware 5.7+)"),
-            mgmtField,
-        ), "Delete", destructive = true, onDismiss = { deleteFor = null }) { f ->
-            vm.piv.delete(v.slot, f.check("key"), f.text("mk")); null
+        val hasCert = v.certificate != null
+        // Without metadata (firmware < 5.3) we can't tell whether a key exists; offer it on 5.7+ only.
+        val canDeleteKey = st.canMoveKey && (v.metadata != null || hasCert)
+        val options = buildList {
+            if (hasCert) add("Certificate only")
+            if (canDeleteKey && hasCert) add("Private key only (keep the certificate)")
+            if (canDeleteKey && hasCert) add("Certificate and private key")
+            if (canDeleteKey && !hasCert) add("Private key")
+        }
+        FormDialog("Delete from ${PivFeature.slotName(v.slot)}?", listOfNotNull(
+            if (options.isNotEmpty()) Field.Choice("what", "Delete", options) else null,
+            if (!st.canMoveKey) Field.Note("Deleting a private key on its own needs firmware 5.7 or newer.") else null,
+        ) + mgmtFields, "Delete", destructive = true, onDismiss = { deleteFor = null }) { f ->
+            if (options.isEmpty()) return@FormDialog "Nothing to delete"
+            val choice = options[f.choice("what")]
+            val cert = choice.startsWith("Certificate")
+            val key = choice.contains("rivate key")
+            vm.piv.delete(v.slot, cert, key, f.text("mk"), f.pinOrNull()); null
+        }
+    }
+
+    moveFor?.let { v ->
+        val targets = (PivFeature.MAIN_SLOTS + PivFeature.RETIRED_SLOTS).filter { it != v.slot }
+        val used = st.slots.filter { !it.isEmpty }.map { it.slot }.toSet()
+        FormDialog("Move key from ${PivFeature.slotName(v.slot)}", listOfNotNull(
+            Field.Choice("to", "Destination slot", targets.map { t ->
+                PivFeature.slotName(t) + if (t in used) " — in use, will be replaced" else ""
+            }),
+            if (v.certificate != null) Field.Check("cert", "Also move the certificate", true) else null,
+            Field.Note("The private key leaves this slot. Any key already in the destination is overwritten. Firmware 5.7+." +
+                if (!st.includesRetired) " Turn on retired slots to see which of 82–95 are in use." else ""),
+        ) + mgmtFields, "Move", destructive = true, onDismiss = { moveFor = null }) { f ->
+            vm.piv.moveKey(v.slot, targets[f.choice("to")], v.certificate != null && f.check("cert"),
+                f.text("mk"), f.pinOrNull()); null
         }
     }
 }
 
 @Composable
-private fun SlotCard(v: PivSlotView, onGenerate: () -> Unit, onImport: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit) {
+private fun SlotCard(
+    v: PivSlotView, onGenerate: () -> Unit, onImport: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit,
+    onAttest: (() -> Unit)? = null, onMove: (() -> Unit)? = null,
+) {
     val df = remember { DateFormat.getDateInstance(DateFormat.MEDIUM) }
     SectionCard {
         Text(PivFeature.slotName(v.slot), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -225,6 +278,8 @@ private fun SlotCard(v: PivSlotView, onGenerate: () -> Unit, onImport: () -> Uni
             SmallButton("Generate") { onGenerate() }
             SmallButton("Import") { onImport() }
             if (c != null) SmallButton("Export") { onExport() }
+            if (onAttest != null) SmallButton("Attest") { onAttest() }
+            if (onMove != null) SmallButton("Move") { onMove() }
             if (!v.isEmpty) SmallButton("Delete") { onDelete() }
         }
     }

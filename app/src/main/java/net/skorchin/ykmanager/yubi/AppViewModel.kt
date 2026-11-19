@@ -30,6 +30,7 @@ enum class Screen(val title: String, val capability: Capability? = null) {
     APPLICATIONS("Applications"),
     RECIPES("Recipes"),
     RESET("Factory reset"),
+    INVENTORY("Full inventory"),
     SETTINGS("Settings"),
     ABOUT("About & legal");
 
@@ -66,11 +67,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 Screen.CERTIFICATES -> piv.refresh(device)
                 Screen.OPENPGP -> pgp.refresh(device)
                 Screen.SLOTS -> otp.rebuild()
+                Screen.INVENTORY -> collectInventory(device)
                 else -> Unit
             }
         }
         core.onKeyChanged = {
-            oath.clear(); piv.clear(); fido.clear(); pgp.clear()
+            oath.clear(); piv.clear(); fido.clear(); pgp.clear(); _inventoryAt.value = null
         }
         core.idleTapHandler = { device, intentNdef -> handleIdleTap(device, intentNdef) }
         viewModelScope.launch {
@@ -93,6 +95,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    private val _inventoryErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+    /** Applications that could not be read during the last inventory, with the reason. */
+    val inventoryErrors: StateFlow<Map<String, String>> = _inventoryErrors.asStateFlow()
+    private val _inventoryAt = MutableStateFlow<Long?>(null)
+    val inventoryAt: StateFlow<Long?> = _inventoryAt.asStateFlow()
+
+    /** Read every application the key supports, for the Full inventory screen. */
+    private suspend fun collectInventory(device: com.yubico.yubikit.core.YubiKeyDevice) {
+        val info = core.keyInfo.value
+        val errors = linkedMapOf<String, String>()
+        suspend fun part(name: String, cap: Capability?, block: suspend () -> Unit) {
+            if (cap != null && info != null && !info.supports(cap)) return
+            try {
+                block()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                errors[name] = (e as? UserFacingException)?.message ?: YubiKeyCore.describe(e)
+            }
+        }
+        part("OATH", Capability.OATH) { oath.refresh(device) }
+        part("FIDO2", Capability.FIDO2) { fido.refresh(device) }
+        part("PIV", Capability.PIV) { piv.refresh(device, includeRetired = true) }
+        part("OpenPGP", Capability.OPENPGP) { pgp.refresh(device) }
+        part("OTP", Capability.OTP) { otp.rebuild() }
+        _inventoryErrors.value = errors
+        _inventoryAt.value = System.currentTimeMillis()
     }
 
     private val _copiedInBackground = Channel<String>(Channel.BUFFERED)

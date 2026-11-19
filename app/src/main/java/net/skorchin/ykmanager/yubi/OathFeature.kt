@@ -1,5 +1,6 @@
 package net.skorchin.ykmanager.yubi
 
+import androidx.core.content.edit
 import com.yubico.yubikit.core.Version
 import com.yubico.yubikit.oath.AccessKey
 import com.yubico.yubikit.oath.Code
@@ -55,6 +56,30 @@ class OathFeature(private val core: YubiKeyCore, context: android.content.Contex
 
     /** Keys the user asked to remember on this phone (encrypted, persistent). */
     private val store = AccessKeyStore(context)
+
+    /** Pinned (favorite) accounts, as "deviceId/credentialIdHex". Stored on this phone only. */
+    private val favPrefs = context.getSharedPreferences("oath_favorites", android.content.Context.MODE_PRIVATE)
+    private val _favorites = MutableStateFlow(favPrefs.getStringSet(FAV_KEY, emptySet()).orEmpty().toSet())
+    val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
+
+    fun isFavorite(deviceId: String?, entry: OathEntry, favs: Set<String> = _favorites.value) =
+        deviceId != null && favoriteKey(deviceId, entry) in favs
+
+    fun toggleFavorite(entry: OathEntry) {
+        val id = _state.value.deviceId ?: return
+        val k = favoriteKey(id, entry)
+        val next = _favorites.value.let { if (k in it) it - k else it + k }
+        _favorites.value = next
+        favPrefs.edit { putStringSet(FAV_KEY, next) }
+    }
+
+    private fun dropFavorite(deviceId: String?, entry: OathEntry) {
+        if (deviceId == null) return
+        val k = favoriteKey(deviceId, entry)
+        if (k !in _favorites.value) return
+        _favorites.value = _favorites.value - k
+        favPrefs.edit { putStringSet(FAV_KEY, _favorites.value) }
+    }
 
     /** Called when the key is removed or another key appears: drop the shown state only. */
     fun clear() {
@@ -192,6 +217,12 @@ class OathFeature(private val core: YubiKeyCore, context: android.content.Contex
     fun rename(entry: OathEntry, issuer: String, name: String) {
         core.run("rename the account") { device ->
             withOath(device) { it.renameCredential(entry.credential, name, issuer.ifBlank { null }) }
+            val id = _state.value.deviceId
+            if (id != null && isFavorite(id, entry)) {
+                val next = _favorites.value - favoriteKey(id, entry) + favoriteKey(id, issuer.ifBlank { null }, name)
+                _favorites.value = next
+                favPrefs.edit { putStringSet(FAV_KEY, next) }
+            }
             core.toast("Account renamed")
         }
     }
@@ -199,6 +230,7 @@ class OathFeature(private val core: YubiKeyCore, context: android.content.Contex
     fun delete(entry: OathEntry) {
         core.run("delete the account") { device ->
             withOath(device) { it.deleteCredential(entry.credential) }
+            dropFavorite(_state.value.deviceId, entry)
             core.toast("Account deleted")
         }
     }
@@ -248,3 +280,9 @@ class OathFeature(private val core: YubiKeyCore, context: android.content.Contex
         }
     }
 }
+
+private const val FAV_KEY = "favorites"
+
+/** Favorites follow the account's issuer and name, which is how OATH identifies it on the key. */
+internal fun favoriteKey(deviceId: String, issuer: String?, name: String) = "$deviceId/${issuer.orEmpty()}:$name"
+internal fun favoriteKey(deviceId: String, entry: OathEntry) = favoriteKey(deviceId, entry.issuer, entry.name)

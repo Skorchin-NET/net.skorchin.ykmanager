@@ -4,6 +4,7 @@ import com.yubico.yubikit.core.YubiKeyDevice
 import com.yubico.yubikit.core.application.CommandException
 import com.yubico.yubikit.fido.ctap.BioEnrollment
 import com.yubico.yubikit.fido.ctap.ClientPin
+import com.yubico.yubikit.fido.ctap.Config
 import com.yubico.yubikit.fido.ctap.CredentialManagement
 import com.yubico.yubikit.fido.ctap.Ctap2Session
 import com.yubico.yubikit.fido.ctap.FingerprintBioEnrollment
@@ -67,6 +68,10 @@ data class FidoState(
     val remainingCredentials: Int? = null,
     val credMgmtSupported: Boolean = false,
     val alwaysUv: Boolean? = null,
+    /** authenticatorConfig (CTAP 2.1): Always UV, minimum PIN length, force PIN change. */
+    val configSupported: Boolean = false,
+    /** How many RP IDs may receive the minimum PIN length (0 = not supported). */
+    val maxMinPinRpIds: Int = 0,
     val passkeys: List<Passkey>? = null,   // null until unlocked with the PIN
     val existingCount: Int? = null,
 )
@@ -131,6 +136,8 @@ class FidoFeature(private val core: YubiKeyCore) {
                 remainingCredentials = info.remainingDiscoverableCredentials,
                 credMgmtSupported = cmSupported,
                 alwaysUv = opts["alwaysUv"] as? Boolean,
+                configSupported = Config.isSupported(info),
+                maxMinPinRpIds = info.maxRpidsForSetMinPinLength,
                 passkeys = passkeys,
                 existingCount = existing,
             )
@@ -194,6 +201,82 @@ class FidoFeature(private val core: YubiKeyCore) {
             }
         }
         return list.sortedWith(compareBy({ it.rpId }, { it.userName })) to meta.existingResidentCredentialsCount
+    }
+
+    // ------------------------------------------------------------------
+    // Security settings (authenticatorConfig, CTAP 2.1, firmware 5.4+)
+    // ------------------------------------------------------------------
+
+    private fun config(s: Ctap2Session, info: Ctap2Session.InfoData, pin: CharArray): Config {
+        if (!Config.isSupported(info)) throw UserFacingException("This YubiKey doesn't support FIDO security settings (firmware 5.4+ needed)")
+        if (info.options["clientPin"] != true) throw UserFacingException("Set a FIDO2 PIN first")
+        val proto = protocol(info)
+        val token = try {
+            ClientPin(s, proto).getPinToken(pin, ClientPin.PIN_PERMISSION_ACFG, null)
+        } catch (e: CommandException) {
+            throw UserFacingException("PIN was not accepted (${KeyErrors.ctap(e)}).")
+        }
+        return Config(s, proto, token)
+    }
+
+    /** Turn "Always require user verification" on or off. */
+    fun setAlwaysUv(pin: CharArray, enabled: Boolean) {
+        core.run("change Always UV") { device ->
+            val changed = core.fido(device) { s ->
+                val info = s.cachedInfo
+                val current = info.options["alwaysUv"] == true
+                if (current != enabled) {
+                    try { config(s, info, pin).toggleAlwaysUv() } catch (e: CommandException) {
+                        throw UserFacingException("Could not change Always UV (${KeyErrors.ctap(e)}).")
+                    }
+                    true
+                } else false
+            }
+            core.toast(when {
+                !changed -> "Always UV was already ${if (enabled) "on" else "off"}"
+                enabled -> "Always UV turned on: every sign-in now needs the PIN or a fingerprint"
+                else -> "Always UV turned off"
+            })
+        }
+    }
+
+    /**
+     * Raise the minimum PIN length, optionally tell some websites (RP IDs) about it, and/or
+     * force a PIN change before the next use. The minimum can only be increased; a FIDO
+     * reset is the only way to lower it again.
+     */
+    fun setPinPolicy(pin: CharArray, newMinLength: Int?, rpIds: List<String>, forceChange: Boolean) {
+        core.run("change the PIN policy") { device ->
+            core.fido(device) { s ->
+                val info = s.cachedInfo
+                if (newMinLength != null) {
+                    if (newMinLength < info.minPinLength) {
+                        throw UserFacingException("The minimum PIN length can only be increased (it is ${info.minPinLength} now)")
+                    }
+                    if (newMinLength > 63) throw UserFacingException("The minimum PIN length can be at most 63")
+                }
+                if (rpIds.size > info.maxRpidsForSetMinPinLength) {
+                    throw UserFacingException(
+                        if (info.maxRpidsForSetMinPinLength == 0) "This YubiKey can't share the minimum PIN length with websites"
+                        else "At most ${info.maxRpidsForSetMinPinLength} website(s) can be listed"
+                    )
+                }
+                try {
+                    config(s, info, pin).setMinPinLength(
+                        newMinLength?.takeIf { it != info.minPinLength },
+                        rpIds.takeIf { it.isNotEmpty() },
+                        if (forceChange) true else null,
+                    )
+                } catch (e: CommandException) {
+                    throw UserFacingException("Could not change the PIN policy (${KeyErrors.ctap(e)}).")
+                }
+            }
+            core.toast(buildString {
+                append("PIN policy updated")
+                if (newMinLength != null) append(". Minimum length: $newMinLength")
+                if (forceChange) append(". The PIN must be changed before it can be used again")
+            })
+        }
     }
 
     fun unlock(pin: CharArray) {
