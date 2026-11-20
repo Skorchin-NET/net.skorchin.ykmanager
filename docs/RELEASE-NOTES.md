@@ -1,6 +1,20 @@
 # Release notes
 
-Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`.
+Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`. Changes merged since the last release collect under `## Unreleased` until the next batched release (see [CI-CD.md](CI-CD.md#release-cadence-batch-by-area)).
+
+## Unreleased
+
+- Internal: OtpFeature split into OtpNdef (NFC tag reading and decoding), OtpSlotProgrammer
+  (programming, delete, swap, HMAC), OtpOutputUpdater (output settings) and OtpCodec (pure
+  encoding/decoding); no behaviour change
+- Internal: NFC tap handling moved out of AppViewModel into NfcTapHandler; no behaviour change
+- Unit tests for the NFC tap actions, OTP output classification, access codes, NDEF
+  configuration records and slot-type evidence
+- Build: GitHub Actions updated (checkout v7, setup-gradle v6, upload-artifact v7,
+  download-artifact v8, OSV-Scanner 2.7.1); build-tool dependencies pulled in by the Android
+  Gradle plugin raised to patched versions
+- Docs: README feature list updated (Full inventory, pinned accounts, PIN-protected PIV
+  management key), passkey fix history moved here, release cadence documented
 
 ## v2.38 (versionCode 40)
 
@@ -159,3 +173,26 @@ Maintenance release: code quality and dependency updates, no feature changes.
 
 - QR scanning via the Google code scanner with ZXing fallback
 - Import from Google Authenticator export QR codes
+
+## v2.20 (versionCode 22)
+
+- Passkey registration responses that sites and Chrome accept. When a site asks for attestation
+  "none" (or doesn't specify), the response carries fmt "none" with a zero AAGUID, exactly as
+  Chrome returns for security keys; many bank servers accept only "none". "direct", "indirect"
+  and "enterprise" keep the YubiKey's own attestation
+- `authenticatorData`, `publicKey` (DER SubjectPublicKeyInfo, named curve) and
+  `publicKeyAlgorithm` are derived from the returned attestation object, because Chrome rejects a
+  provider's registration if any of them differs from what it computes
+  (`MakeCredentialResponseFromValue` in Chromium's `components/webauthn/json/value_conversions.cc`).
+  `RegistrationResponseTest` covers both
+- The diagnostics log records the requested and returned attestation format
+
+## v2.19 (versionCode 21)
+
+- Declare the passkey capability Android actually matches. The provider declared
+  `android.credentials.TYPE_PUBLIC_KEY_CREDENTIAL`, but requests made through androidx.credentials
+  (Chrome and apps) are typed `androidx.credentials.TYPE_PUBLIC_KEY_CREDENTIAL`. Android only asks
+  providers whose capabilities match, so YK Manager was never asked, even as the default passkey
+  service. Both spellings are now declared (`ProviderCapabilityTest` guards this)
+- After updating, switch YK Manager off and on in Settings > Passwords, passkeys & accounts so
+  Android re-reads it

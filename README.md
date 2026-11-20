@@ -2,17 +2,18 @@
 
 A starter Android app that manages a YubiKey the way the desktop **YubiKey Manager (ykman)** does, built on Yubico's official Android SDK ([YubiKit](https://developers.yubico.com/yubikit-android/index.html)).
 
-## Features (v2.0)
+## Features
 
 Navigation drawer with the same sections as desktop YubiKey Manager:
 
 - **Home**: form factor, firmware, serial, part number, FIPS / Security Key flags, config lock state, timeouts, and enabled vs. supported applications per transport (USB / NFC).
-- **Accounts (OATH)**: TOTP/HOTP codes with countdown and auto-refresh over USB, tap to calculate touch/HOTP accounts, copy codes, add by QR scan, `otpauth://` URI or manual entry, rename, delete, and set/change/remove the OATH password (optionally remembered on the phone).
+- **Accounts (OATH)**: TOTP/HOTP codes with countdown and auto-refresh over USB, tap to calculate touch/HOTP accounts, copy codes, add by QR scan, `otpauth://` URI or manual entry, rename, delete, and set/change/remove the OATH password (optionally remembered on the phone). **Pin to top** stars an account and lists it first (stored on this phone).
 - **Passkeys (FIDO2)**: versions, AAGUID, PIN status/retries, min PIN length, free credential slots; set/change PIN; unlock with the PIN to list and delete resident passkeys. Tap a passkey for its full record: RP ID/name/hash, user handle, credential ID (hex + base64url), transports, credProtect level, large-blob key, and the public key (algorithm, curve, point, fingerprint), each copyable.
-- **Certificates (PIV)**: all four main slots (plus retired slots on demand) with subject, issuer, serial, validity, signature algorithm, SHA-256 fingerprint, key type, origin and PIN/touch policy. Generate keys (ECC P-256/P-384, RSA 2048/3072/4096) with a self-signed certificate or CSR, import PKCS#12 / PEM / DER, export certificates, delete certificates (and keys on firmware 5.7+), change PIN / PUK / management key, unblock PIN, set retry counts.
+- **Certificates (PIV)**: all four main slots (plus retired slots on demand) with subject, issuer, serial, validity, signature algorithm, SHA-256 fingerprint, key type, origin and PIN/touch policy. Generate keys (ECC P-256/P-384, RSA 2048/3072/4096) with a self-signed certificate or CSR, import PKCS#12 / PEM / DER, export certificates, delete certificates (and keys on firmware 5.7+), change PIN / PUK / management key, unblock PIN, set retry counts. **Protect with PIN** stores a random management key on the YubiKey, unlocked by the PIN, in the same format as ykman and Yubico Authenticator (legacy PIN-derived keys also work).
 - **OTP slots**: reads the slot configuration the YubiKey reports (programmed/empty, touch-triggered vs. challenge-response) and identifies the exact type: captures what the slot types over USB, reads the NFC NDEF tag, or runs a challenge-response test. It also keeps a local history of what this app programmed (never secrets). You can program Yubico OTP / HOTP / static password / HMAC-SHA1 challenge-response with access codes, and delete, swap, calculate HMAC, and configure NDEF output. Output settings from the Personalization Tool's Settings tab (tabs, Enter, delays, pacing, numeric keypad, fast trigger, reference string, serial number visibility, LED, allow update) live under **Settings → OTP output** and can be pushed to an existing slot with **Update settings**. The **OTP decoder** decrypts a Yubico OTP with its AES key to show the private ID, counters and timer (the key never outputs the private ID in the clear).
 - **OpenPGP**: version, PIN retry counters, signature counter, signature PIN policy, and per-key fingerprint / creation date / origin / touch policy. Change PIN / admin PIN, set reset code, unblock PIN, set retry counts, change touch policies.
 - **Applications**: enable/disable each application over USB and NFC, set/change/remove the configuration lock code, auto-eject and challenge-response timeouts.
+- **Full inventory**: one read collects every application the key supports (device, OTP slots, accounts, FIDO2/passkeys, PIV certificates, OpenPGP) into a single report you can print, save as a PDF through Android's print dialog, or share as text. It lists configuration only, never secrets, PINs or codes.
 - **Factory reset**: OATH, FIDO, PIV, OpenPGP, and both OTP slots, each with confirmation.
 
 ### Why OTP slot contents can't be fully read back
@@ -21,7 +22,7 @@ YubiKeys never return a slot's secret or stored configuration. The desktop app o
 
 ### Not yet included
 
-YubiHSM Auth, Ed25519/X25519 PIV keys, PIN-protected PIV management key, OpenPGP key generation/import (use GnuPG).
+YubiHSM Auth, Ed25519/X25519 PIV keys, OpenPGP key generation/import (use GnuPG).
 
 ## Recipes (batch provisioning)
 
@@ -67,9 +68,7 @@ What it handles:
 
 Sign-in responses follow what Android expects from a passkey provider: `authenticatorAttachment` is reported as `platform` (as Google Password Manager, Bitwarden and KeePassDX do), `clientExtensionResults` is always present, and for browser requests the app rebuilds the browser's exact `clientDataJSON` and returns it when its hash matches the one that was signed (otherwise a placeholder the browser replaces).
 
-v2.20 registration fix: when a site asks for attestation "none" (or doesn't specify), the response now carries fmt "none" with a zero AAGUID, exactly as Chrome returns for security keys; many bank servers accept only "none" then. "direct"/"indirect"/"enterprise" keep the YubiKey's own attestation. `authenticatorData`, `publicKey` (DER SubjectPublicKeyInfo, named curve) and `publicKeyAlgorithm` are derived from the returned attestation object, because Chrome rejects a provider's registration if any of them differs from what it computes (`MakeCredentialResponseFromValue` in Chromium's `components/webauthn/json/value_conversions.cc`). `RegistrationResponseTest` covers both. The diagnostics log records the requested and returned attestation format.
-
-v2.19 fix: the provider declared its passkey capability as `android.credentials.TYPE_PUBLIC_KEY_CREDENTIAL`, but requests made through androidx.credentials (Chrome and apps) are typed `androidx.credentials.TYPE_PUBLIC_KEY_CREDENTIAL`. Android only asks providers whose capabilities match, so YK Manager was never asked, even as the default passkey service. Both spellings are now declared (`ProviderCapabilityTest` guards this). After updating, switch YK Manager off and on in Settings > Passwords, passkeys & accounts so Android re-reads it.
+Registration responses use attestation "none" unless the site asks for more, and the provider declares both the platform and androidx passkey capability types. See [release notes](docs/RELEASE-NOTES.md) v2.19 and v2.20 for the details. After updating from v2.18 or earlier, switch YK Manager off and on in Settings > Passwords, passkeys & accounts so Android re-reads its capabilities.
 
 If YK Manager never appears in the sign-in sheet (v2.17):
 
@@ -128,35 +127,38 @@ See [docs/CI-CD.md](docs/CI-CD.md) for the required secrets and the release proc
 ## Project layout
 
 ```
-app/src/main/java/net.skorchin.ykmanager/
-├── MainActivity.kt                 # Lifecycle + NFC/USB discovery wiring
+app/src/main/java/net/skorchin/ykmanager/
+├── MainActivity.kt          # Lifecycle, NFC reader mode / NDEF intents, USB discovery wiring
+├── passkey/                 # Credential Manager passkey provider (service, activity, ceremony, JSON, diagnostics)
 ├── yubi/
-│   ├── YubiKeyController.kt        # All YubiKit logic: discovery, sessions, actions
-│   ├── Models.kt                   # UI state, slot-program parameter types
-│   └── Encoding.kt                 # modhex / base32 / hex / HID scan-code helpers
-└── ui/
-    ├── AppRoot.kt                  # Scaffold, bottom navigation, snackbar
-    ├── HomeTab.kt                  # Status + device info
-    ├── InterfacesTab.kt            # Enable/disable applications per interface
-    ├── OtpTab.kt                   # Slot programming, deletion, swap, HMAC test
-    └── Common.kt                   # Shared components, capability formatting
+│   ├── YubiKeyCore.kt       # Discovery, connections, sessions, busy/touch/dialog state
+│   ├── AppViewModel.kt      # Screens, feature wiring, USB auto-refresh, inventory
+│   ├── NfcTapHandler.kt     # What an NFC tap does when nothing is waiting (Settings → NFC tap)
+│   ├── OtpFeature.kt        # OTP slots API and slot identification, delegating to:
+│   │   ├── OtpNdef.kt       #   NFC (NDEF) tag reading/decoding and NDEF output configuration
+│   │   ├── OtpSlotProgrammer.kt  # program / delete / swap slots, HMAC challenge-response
+│   │   ├── OtpOutputUpdater.kt   # Update settings on a programmed slot
+│   │   ├── OtpCodec.kt      #   pure encoding/decoding (output classification, access codes, NDEF config)
+│   │   └── OtpModels.kt     #   slot types, history, shared slot state
+│   ├── NdefReader.kt, OtpDecoder.kt, OtpOutput.kt, Encoding.kt  # parsing and encoding helpers
+│   └── OathFeature.kt, FidoFeature.kt, PivFeature.kt, OpenPgpFeature.kt, ManagementFeature.kt,
+│       RecipeFeature.kt, Inventory.kt, ...                       # one class per YubiKey application
+└── ui/                      # Compose screens, one file per section, plus shared Components.kt
 ```
 
-All YubiKey communication is serialized on a single-threaded dispatcher (`YubiKeyController.deviceScope`), which is what YubiKit requires — only one connection can be open at a time.
+All YubiKey communication goes through `YubiKeyCore`, which runs it on a single-threaded dispatcher, as YubiKit requires (only one connection can be open at a time). Unit tests live in `app/src/test/` and run on the JVM; classes that talk to Android or the key keep their decisions in plain functions or behind small interfaces (for example `NfcTapHandler.Effects`) so they can be tested without hardware.
 
 ## Security notes
 
-- **Configuration lock code** and **slot access codes** are not wired into the UI yet; `applyDeviceConfig`/`putConfiguration` currently pass `null` for them. If your key uses a lock code, add a field for `currentLockCode`/`newLockCode` before calling `updateDeviceConfig` or `putConfiguration`.
 - Think twice before disabling an application over the interface you are currently using — e.g. disabling YubiOTP over NFC while managing slots over NFC. The desktop manager warns about the same thing.
-- Slot configurations cannot be read back out of the key: if you program a random Yubico OTP credential, save the parameters shown in the snackbar if you intend to register them with a validation server.
+- Slot configurations cannot be read back out of the key: if you program a random Yubico OTP credential, save the parameters shown after programming if you intend to register them with a validation server.
+- See [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) for the security review and the scanners that run in CI.
 
 ## Roadmap ideas
 
-- OATH (TOTP/HOTP) account management — YubiKit `oath` module (`OathSession`)
-- PIV management (keys, certificates, PIN/PUK/mgmt key) — `piv` module
-- OpenPGP card management — `openpgp` module
-- FIDO2 PIN reset and credential management — `fido` module (`CtapSession`)
-- Configuration lock code and slot access-code support
+- YubiHSM Auth
+- Ed25519/X25519 PIV keys
+- OpenPGP key generation and import
 - Hardware testing of the passkey provider across YubiKey generations
 
 ## Sources
