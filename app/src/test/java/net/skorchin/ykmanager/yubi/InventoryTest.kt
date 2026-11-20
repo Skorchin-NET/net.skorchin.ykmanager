@@ -34,4 +34,11 @@ class InventoryTest {
         assertTrue(t.contains("    Type: TOTP (30s)"))
         assertTrue(t.contains("(Could not be read: timeout)"))
     }
+
+    @Test fun htmlSetsPrintPageMargins() {
+        val html = Inventory.html(report)
+        assertTrue(html.contains("@page{size:auto;margin:${Inventory.PAGE_MARGIN}}"))
+        assertFalse(html.contains("@page{margin:0"))
+        assertTrue(html.contains("<header><h1>"))
+    }
 }

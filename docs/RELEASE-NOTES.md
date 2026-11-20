@@ -4,6 +4,13 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
 
 ## Unreleased
 
+## v2.39 (versionCode 41)
+
+- Printed inventory reports now have page margins (18 mm top, 16 mm sides, 20 mm bottom).
+  Previously Android's "Save as PDF" printer put text at the edge of the page
+- Print layout tidied: a header rule under the title, shaded alternating rows, indented
+  sub-groups, long values (fingerprints, serials) wrap inside the cell, and rows and headings
+  are kept from splitting across pages
 - Internal: OtpFeature split into OtpNdef (NFC tag reading and decoding), OtpSlotProgrammer
   (programming, delete, swap, HMAC), OtpOutputUpdater (output settings) and OtpCodec (pure
   encoding/decoding); no behaviour change
