@@ -4,6 +4,8 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
 
 ## Unreleased
 
+## v2.42 (versionCode 44)
+
 - PIN entry now opens the number keypad: FIDO2 PIN (including the passkey sign-in sheet),
   PIV PIN and PUK, OpenPGP user PIN, admin PIN and reset code, and the PIN fields in Recipes.
   YubiKey PINs may contain letters, so each PIN field has a keyboard button to switch to the
