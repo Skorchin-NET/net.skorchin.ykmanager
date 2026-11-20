@@ -115,7 +115,7 @@ fun FingerprintsScreen(vm: AppViewModel) {
     when (dialog) {
         FpDialog.UNLOCK -> FormDialog(
             title = "FIDO2 PIN",
-            fields = listOf(Field.Text("pin", "FIDO2 PIN", secret = true)),
+            fields = listOf(Field.Text("pin", "FIDO2 PIN", secret = true, pin = true)),
             confirmLabel = "Unlock",
             onDismiss = { dialog = null },
         ) { v -> vm.fido.unlock(v.chars("pin")); null }

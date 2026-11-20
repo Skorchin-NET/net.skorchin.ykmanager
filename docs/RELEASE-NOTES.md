@@ -4,6 +4,11 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
 
 ## Unreleased
 
+- PIN entry now opens the number keypad: FIDO2 PIN (including the passkey sign-in sheet),
+  PIV PIN and PUK, OpenPGP user PIN, admin PIN and reset code, and the PIN fields in Recipes.
+  YubiKey PINs may contain letters, so each PIN field has a keyboard button to switch to the
+  full keyboard and back. Passwords and secret keys still use the full keyboard
+
 ## v2.41 (versionCode 43)
 
 - Factory reset moved from the side menu to a "Factory reset" section at the bottom of Settings.

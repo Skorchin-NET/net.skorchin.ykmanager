@@ -396,7 +396,7 @@ private fun RecipeEditor(vm: AppViewModel, existing: Recipe?, onDone: (Recipe?) 
             Hint("Applied only where the key still has factory defaults (or no PIN/password yet). Keys already personalised are skipped.")
             Spacer(Modifier.height(4.dp))
             ToggleField("FIDO2 PIN", fidoOn, { fidoOn = it }, fidoPin, { fidoPin = it }, "PIN (4+ characters)")
-            ToggleField("OATH password", oathOn, { oathOn = it }, oathPw, { oathPw = it }, "Password")
+            ToggleField("OATH password", oathOn, { oathOn = it }, oathPw, { oathPw = it }, "Password", pin = false)
             ToggleField("PIV PIN", pivPinOn, { pivPinOn = it }, pivPin, { pivPin = it }, "PIN (6-8 characters)")
             ToggleField("PIV PUK", pivPukOn, { pivPukOn = it }, pivPuk, { pivPuk = it }, "PUK (6-8 characters)")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -520,13 +520,17 @@ private fun validate(
 }
 
 @Composable
-private fun ToggleField(label: String, on: Boolean, onToggle: (Boolean) -> Unit, value: String, onValue: (String) -> Unit, hint: String) {
+private fun ToggleField(
+    label: String, on: Boolean, onToggle: (Boolean) -> Unit, value: String, onValue: (String) -> Unit, hint: String,
+    pin: Boolean = true,
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f))
         Switch(on, onToggle)
     }
     if (on) {
-        OutlinedTextField(value, onValue, label = { Text(hint) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        if (pin) PinTextField(value, onValue, hint, Modifier.fillMaxWidth())
+        else OutlinedTextField(value, onValue, label = { Text(hint) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation())
         Spacer(Modifier.height(4.dp))
     }

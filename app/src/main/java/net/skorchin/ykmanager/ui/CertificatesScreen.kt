@@ -120,23 +120,23 @@ fun CertificatesScreen(vm: AppViewModel) {
             supporting = "Pre-filled with the factory default key")
     }
     /** Extra fields for dialogs that don't already ask for the PIN. */
-    val mgmtFields = listOfNotNull(mgmtField, if (st.pinUnlocksMgmtKey) Field.Text("pin", "PIN", secret = true) else null)
+    val mgmtFields = listOfNotNull(mgmtField, if (st.pinUnlocksMgmtKey) Field.Text("pin", "PIN", secret = true, pin = true) else null)
     fun FormValues.pinOrNull(): CharArray? = text("pin").takeIf { it.isNotEmpty() }?.toCharArray()
 
     when (dialog) {
         PivDialog.CHANGE_PIN -> FormDialog("Change PIN", listOf(
-            Field.Text("cur", "Current PIN", secret = true), Field.Text("new", "New PIN (6–8)", secret = true),
-            Field.Text("rep", "Repeat", secret = true)), "Change", onDismiss = { dialog = null }) { v ->
+            Field.Text("cur", "Current PIN", secret = true, pin = true), Field.Text("new", "New PIN (6–8)", secret = true, pin = true),
+            Field.Text("rep", "Repeat", secret = true, pin = true)), "Change", onDismiss = { dialog = null }) { v ->
             requireMatch(v, "new", "rep", 6) ?: run { vm.piv.changePin(v.chars("cur"), v.chars("new")); null }
         }
         PivDialog.CHANGE_PUK -> FormDialog("Change PUK", listOf(
-            Field.Text("cur", "Current PUK", secret = true), Field.Text("new", "New PUK (6–8)", secret = true),
-            Field.Text("rep", "Repeat", secret = true)), "Change", onDismiss = { dialog = null }) { v ->
+            Field.Text("cur", "Current PUK", secret = true, pin = true), Field.Text("new", "New PUK (6–8)", secret = true, pin = true),
+            Field.Text("rep", "Repeat", secret = true, pin = true)), "Change", onDismiss = { dialog = null }) { v ->
             requireMatch(v, "new", "rep", 6) ?: run { vm.piv.changePuk(v.chars("cur"), v.chars("new")); null }
         }
         PivDialog.UNBLOCK -> FormDialog("Unblock PIN", listOf(
-            Field.Text("cur", "PUK", secret = true), Field.Text("new", "New PIN (6–8)", secret = true),
-            Field.Text("rep", "Repeat", secret = true)), "Unblock", onDismiss = { dialog = null }) { v ->
+            Field.Text("cur", "PUK", secret = true, pin = true), Field.Text("new", "New PIN (6–8)", secret = true, pin = true),
+            Field.Text("rep", "Repeat", secret = true, pin = true)), "Unblock", onDismiss = { dialog = null }) { v ->
             requireMatch(v, "new", "rep", 6) ?: run { vm.piv.unblockPin(v.chars("cur"), v.chars("new")); null }
         }
         PivDialog.MGMT_KEY -> {
@@ -150,7 +150,7 @@ fun CertificatesScreen(vm: AppViewModel) {
                 Field.Text("new", "New key (hex, if not generating)"),
                 Field.Check("touch", "Require touch to use the management key"),
                 Field.Check("protect", "Protect with PIN: store the key on the YubiKey, unlocked by the PIN", st.pinUnlocksMgmtKey),
-                Field.Text("pin", "PIN (needed to protect the key, or if it is protected now)", secret = true),
+                Field.Text("pin", "PIN (needed to protect the key, or if it is protected now)", secret = true, pin = true),
                 Field.Note("AES192 is the default on firmware 5.7+. Older keys may only support TDES. " +
                     "A PIN-protected key works the same way in ykman and Yubico Authenticator."),
             ), "Change", onDismiss = { dialog = null }) { v ->
@@ -167,7 +167,7 @@ fun CertificatesScreen(vm: AppViewModel) {
             Field.Note("This resets the PIN to 123456 and the PUK to 12345678."),
             Field.Text("p", "PIN retries", "3", numeric = true),
             Field.Text("u", "PUK retries", "3", numeric = true),
-            mgmtField, Field.Text("pin", "Current PIN", secret = true),
+            mgmtField, Field.Text("pin", "Current PIN", secret = true, pin = true),
         ), "Set", destructive = true, onDismiss = { dialog = null }) { v ->
             val p = v.int("p", -1); val u = v.int("u", -1)
             if (p !in 1..255 || u !in 1..255) return@FormDialog "Retries must be 1–255"
@@ -184,7 +184,7 @@ fun CertificatesScreen(vm: AppViewModel) {
             Field.Text("days", "Validity (days, self-signed)", "365", numeric = true),
             Field.Choice("pp", "PIN policy", PIN_POLICIES.map(::policyLabel)),
             Field.Choice("tp", "Touch policy", TOUCH_POLICIES.map(::policyLabel)),
-            mgmtField, Field.Text("pin", "PIN (to sign the certificate/CSR)", secret = true),
+            mgmtField, Field.Text("pin", "PIN (to sign the certificate/CSR)", secret = true, pin = true),
             Field.Note("Any existing key in this slot is replaced. RSA 3072/4096 need firmware 5.7+ and can take a minute."),
         ), "Generate", onDismiss = { generateFor = null }) { v ->
             if (v.text("pin").isBlank()) return@FormDialog "Enter the PIN"
