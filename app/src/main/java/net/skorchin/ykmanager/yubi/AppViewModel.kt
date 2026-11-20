@@ -29,7 +29,6 @@ enum class Screen(val title: String, val capability: Capability? = null) {
     OPENPGP("OpenPGP", Capability.OPENPGP),
     APPLICATIONS("Applications"),
     RECIPES("Recipes"),
-    RESET("Factory reset"),
     INVENTORY("Full inventory"),
     SETTINGS("Settings"),
     ABOUT("About & legal");

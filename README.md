@@ -14,7 +14,7 @@ Navigation drawer with the same sections as desktop YubiKey Manager:
 - **OpenPGP**: version, PIN retry counters, signature counter, signature PIN policy, and per-key fingerprint / creation date / origin / touch policy. Change PIN / admin PIN, set reset code, unblock PIN, set retry counts, change touch policies.
 - **Applications**: enable/disable each application over USB and NFC, set/change/remove the configuration lock code, auto-eject and challenge-response timeouts.
 - **Full inventory**: one read collects every application the key supports (device, OTP slots, accounts, FIDO2/passkeys, PIV certificates, OpenPGP) into a single report you can print, save as a PDF through Android's print dialog, or share as text. It lists configuration only, never secrets, PINs or codes.
-- **Factory reset**: OATH, FIDO, PIV, OpenPGP, and both OTP slots, each with confirmation.
+- **Factory reset** (under Settings): OATH, FIDO, PIV, OpenPGP, and both OTP slots, each with confirmation.
 
 ### Why OTP slot contents can't be fully read back
 
