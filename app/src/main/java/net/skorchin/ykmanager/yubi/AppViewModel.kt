@@ -134,52 +134,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     val copiedInBackground: Flow<String> = _copiedInBackground.receiveAsFlow()
 
-    /** The configurable behaviour for a tap that nothing was waiting for. */
-    private suspend fun handleIdleTap(device: NfcYubiKeyDevice, intentNdef: ByteArray?): Boolean {
-        val app = getApplication<Application>()
-        return when (settings.nfcTapAction.value) {
-            NfcTapAction.REFRESH -> false
-            NfcTapAction.NOTHING -> true
-            NfcTapAction.ACCOUNTS -> { _screen.value = Screen.ACCOUNTS; false }
-            NfcTapAction.COPY_OTP, NfcTapAction.SHOW_OTP, NfcTapAction.OPEN_LINK -> {
-                val prefixes = otp.knownNdefPrefixes()
-                val content = intentNdef?.let { runCatching { NdefReader.parse(it, prefixes) }.getOrNull() }
-                    ?: core.smartCard(device) { NdefReader.read(it, prefixes) }
-                when (settings.nfcTapAction.value) {
-                    NfcTapAction.COPY_OTP -> {
-                        // Never put undecoded keyboard scan codes (control characters) on the clipboard.
-                        if (content.otp.isEmpty() || content.otp.any { it < ' ' || it == '\uFFFD' })
-                            throw UserFacingException("The NFC output could not be decoded as readable text, so nothing was " +
-                                "copied. Use OTP slots → Show NFC output to see the raw scan codes.")
-                        copy(app, content.otp)
-                        val what = if (content.staticPassword != null) "Static password" else "One-time password"
-                        if (intentNdef != null) _copiedInBackground.trySend("$what copied to the clipboard")
-                        else core.toast("$what copied to the clipboard")
-                    }
-                    NfcTapAction.OPEN_LINK -> {
-                        if (!content.isUri) throw UserFacingException("The NDEF record is text, not a link: ${content.value}")
-                        val uri = content.value.toUri()
-                        // Only web links: a tag could otherwise carry intent:, file: or other schemes.
-                        if (uri.scheme?.lowercase() !in setOf("http", "https"))
-                            throw UserFacingException("Only http(s) links are opened. The record is: ${content.value}")
-                        app.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    }
-                    else -> {
-                        if (settings.copyOnShow.value) copy(app, content.otp)
-                        val isStatic = content.staticPassword != null
-                        core.showDialog(InfoDialog(
-                            if (isStatic) "Static password" else "One-time password",
-                            content.otp + (if (content.otp != content.value) "\n\n${if (content.isUri) "Link" else "Text"}: ${content.value}" else "") +
-                                (if (isStatic) "\n\nThe slot holds a static password. Over NFC the key sends raw keyboard scan codes, which were translated using the US keyboard layout; characters typed on another layout may differ." else "") +
-                                (if (settings.copyOnShow.value) "\n\n(copied to the clipboard)" else ""),
-                            content.otp,
-                        ))
-                    }
-                }
-                true
+    /** The configurable behaviour for a tap that nothing was waiting for (see [NfcTapHandler]). */
+    private val tapHandler = NfcTapHandler(
+        tapAction = { settings.nfcTapAction.value },
+        copyOnShow = { settings.copyOnShow.value },
+        knownPrefixes = { otp.knownNdefPrefixes() },
+        effects = object : NfcTapHandler.Effects {
+            override fun openAccounts() { _screen.value = Screen.ACCOUNTS }
+            override fun copy(value: String) = copy(getApplication(), value)
+            override fun confirmCopied(message: String, background: Boolean) {
+                if (background) _copiedInBackground.trySend(message) else core.toast(message)
             }
-        }
-    }
+            override fun openLink(url: String) {
+                getApplication<Application>().startActivity(
+                    Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            override fun showDialog(dialog: InfoDialog) = core.showDialog(dialog)
+        },
+    )
+
+    private suspend fun handleIdleTap(device: NfcYubiKeyDevice, intentNdef: ByteArray?): Boolean =
+        tapHandler.handle(intentNdef) { prefixes -> core.smartCard(device) { NdefReader.read(it, prefixes) } }
 
     private fun copy(ctx: Context, value: String) {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
