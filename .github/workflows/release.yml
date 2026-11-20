@@ -55,7 +55,7 @@ jobs:
       signed: ${{ steps.keystore.outputs.present }}
     steps:
       - name: Check out sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v6
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out sources (for release notes)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
