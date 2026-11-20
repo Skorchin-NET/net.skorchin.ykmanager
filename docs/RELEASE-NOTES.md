@@ -4,6 +4,11 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
 
 ## Unreleased
 
+## v2.40 (versionCode 42)
+
+- Printed inventory reports now have a 0.75 in margin on all four sides. v2.39 set the margin
+  in the report's stylesheet, which Android's print system ignores, so text still reached the
+  page edge. The margin is now set on the print job itself
 ## v2.39 (versionCode 41)
 
 - Printed inventory reports now have page margins (18 mm top, 16 mm sides, 20 mm bottom).

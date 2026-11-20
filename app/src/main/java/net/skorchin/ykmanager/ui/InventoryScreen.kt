@@ -2,6 +2,7 @@ package net.skorchin.ykmanager.ui
 
 import android.content.Context
 import android.content.Intent
+import android.print.PrintAttributes
 import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -319,7 +320,9 @@ private fun printInventory(context: Context, report: InventoryReport, keep: Arra
         override fun onPageFinished(view: WebView, url: String?) {
             val pm = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
             val name = "YubiKey inventory"
-            pm.print(name, view.createPrintDocumentAdapter(name), null)
+            val margin = Inventory.PRINT_MARGIN_MILS
+            val margins = PrintAttributes.Margins(margin, margin, margin, margin)
+            pm.print(name, MarginPrintAdapter(view.createPrintDocumentAdapter(name), margins), null)
             keep[0] = null
         }
     }
