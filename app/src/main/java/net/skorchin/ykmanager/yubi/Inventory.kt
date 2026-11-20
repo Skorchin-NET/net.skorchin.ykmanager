@@ -29,14 +29,16 @@ object Inventory {
     }
 
     /**
-     * Print stylesheet. Android's "Save as PDF" printer reports zero minimum margins, so the
-     * page margins must come from the document (@page); the WebView print adapter honours them.
+     * Margin on every side of the printed page, in mils (1/1000 inch): 0.75 in.
+     * Android's WebView print adapter ignores CSS @page margins and only uses the
+     * margins in the print job's PrintAttributes, which the "Save as PDF" printer sets to
+     * zero. The print code therefore forces these margins on the job (see MarginPrintAdapter),
+     * and the stylesheet sets no page margin of its own so the two can't add up.
      */
-    const val PAGE_MARGIN = "18mm 16mm 20mm 16mm"
+    const val PRINT_MARGIN_MILS = 750
 
     private const val PRINT_CSS =
-        "@page{size:auto;margin:$PAGE_MARGIN}" +
-            "html{-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+        "html{-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
             "body{font-family:sans-serif;font-size:10pt;line-height:1.35;color:#111;margin:0}" +
             "@media screen{body{margin:16px}}" +
             "header{border-bottom:2pt solid #2e7d32;padding-bottom:6pt;margin-bottom:10pt}" +

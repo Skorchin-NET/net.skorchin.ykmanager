@@ -1,5 +1,6 @@
 package net.skorchin.ykmanager.yubi
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,8 +38,9 @@ class InventoryTest {
 
     @Test fun htmlSetsPrintPageMargins() {
         val html = Inventory.html(report)
-        assertTrue(html.contains("@page{size:auto;margin:${Inventory.PAGE_MARGIN}}"))
-        assertFalse(html.contains("@page{margin:0"))
+        // Margins are set on the print job; a CSS page margin would be ignored or doubled.
+        assertFalse(html.contains("@page"))
+        assertEquals(750, Inventory.PRINT_MARGIN_MILS) // 0.75 in
         assertTrue(html.contains("<header><h1>"))
     }
 }
