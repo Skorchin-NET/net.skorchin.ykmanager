@@ -117,8 +117,12 @@ object PasskeyJson {
      * could not be recreated, a placeholder is used, which Android's
      * guidance says the browser replaces.
      */
-    fun finalizeResponse(json: JSONObject, matchedClientData: ByteArray?): Pair<JSONObject, ClientDataMode> {
-        json.put("authenticatorAttachment", "platform")
+    fun finalizeResponse(
+        json: JSONObject,
+        matchedClientData: ByteArray?,
+        attachment: String = ATTACHMENT_PLATFORM,
+    ): Pair<JSONObject, ClientDataMode> {
+        json.put("authenticatorAttachment", attachment)
         if (!json.has("clientExtensionResults")) json.put("clientExtensionResults", JSONObject())
         val r = json.optJSONObject("response") ?: return json to ClientDataMode.BUILT
         val mode = when {
@@ -128,6 +132,33 @@ object PasskeyJson {
         }
         return json to mode
     }
+
+    const val ATTACHMENT_PLATFORM = "platform"
+    const val ATTACHMENT_CROSS_PLATFORM = "cross-platform"
+
+    /** authenticatorSelection.authenticatorAttachment of a registration request, or null if unset. */
+    fun requestedAttachment(createRequest: JSONObject?): String? =
+        createRequest?.optJSONObject("authenticatorSelection")
+            ?.optString("authenticatorAttachment")?.trim()?.lowercase()?.ifBlank { null }
+
+    /**
+     * True when a registration asks only for an authenticator built into the
+     * device ("platform"). A YubiKey is a roaming (cross-platform)
+     * authenticator, so WebAuthn says it must not be used for such a request.
+     */
+    fun isPlatformOnly(createRequest: JSONObject?): Boolean =
+        requestedAttachment(createRequest) == ATTACHMENT_PLATFORM
+
+    fun isPlatformOnly(createRequestJson: String?): Boolean =
+        runCatching { isPlatformOnly(createRequestJson?.let { JSONObject(it) }) }.getOrDefault(false)
+
+    /**
+     * authenticatorAttachment to report for a new passkey. A YubiKey is
+     * "cross-platform"; "platform" only when the user chose to answer a
+     * platform-only request anyway, because sites asking for that reject anything else.
+     */
+    fun registrationAttachment(createRequest: JSONObject?): String =
+        if (isPlatformOnly(createRequest)) ATTACHMENT_PLATFORM else ATTACHMENT_CROSS_PLATFORM
 
     /** What [prepareRegistration] did, for the diagnostics log. */
     data class RegistrationInfo(val attestationRequested: String, val formatFromKey: String, val formatReturned: String)

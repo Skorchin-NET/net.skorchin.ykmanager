@@ -68,6 +68,7 @@ fun PasskeyProviderCard() {
     var enabled by remember { mutableStateOf(isPasskeyProviderEnabled(context)) }
     var askPinFirst by remember { mutableStateOf(store.askPinFirst) }
     var remember by remember { mutableStateOf(store.rememberAccounts) }
+    var allowPlatformOnly by remember { mutableStateOf(store.allowPlatformOnly) }
     var remembered by remember { mutableIntStateOf(store.accounts().size) }
     var logCount by remember { mutableIntStateOf(store.logCount()) }
     var showLog by remember { mutableStateOf(false) }
@@ -169,6 +170,11 @@ fun PasskeyProviderCard() {
             askPinFirst = it; store.askPinFirst = it
         }
         Hint("Enter the PIN first and a single tap is enough.")
+        ToggleRow("Offer the YubiKey when a site asks for a phone passkey", allowPlatformOnly) {
+            allowPlatformOnly = it; store.allowPlatformOnly = it
+        }
+        Hint("Some sites ask to store the passkey in the phone itself. Off: YK Manager stays out of the way " +
+            "and nothing is written to the key. On: you can save it on the YubiKey anyway, but the site may refuse it.")
         ToggleRow("Remember accounts in the passkey sheet", remember) {
             remember = it; store.rememberAccounts = it; remembered = store.accounts().size
         }

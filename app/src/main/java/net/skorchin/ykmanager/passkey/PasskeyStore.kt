@@ -30,6 +30,15 @@ class PasskeyStore(context: Context) {
         get() = prefs.getBoolean(KEY_ASK_PIN_FIRST, true)
         set(value) { prefs.edit { putBoolean(KEY_ASK_PIN_FIRST, value) } }
 
+    /**
+     * Offer the YubiKey even when a site asks for a passkey stored in the
+     * phone itself (authenticatorAttachment "platform"). Off by default:
+     * such sites may refuse or later reject a security-key passkey.
+     */
+    var allowPlatformOnly: Boolean
+        get() = prefs.getBoolean(KEY_ALLOW_PLATFORM_ONLY, false)
+        set(value) { prefs.edit { putBoolean(KEY_ALLOW_PLATFORM_ONLY, value) } }
+
     /** Show remembered accounts in the Android passkey sheet. */
     var rememberAccounts: Boolean
         get() = prefs.getBoolean(KEY_REMEMBER, true)
@@ -165,6 +174,7 @@ class PasskeyStore(context: Context) {
         const val MAX_ASKED = 15
         const val KEY_ASK_PIN_FIRST = "ask_pin_first"
         const val KEY_REMEMBER = "remember_accounts"
+        const val KEY_ALLOW_PLATFORM_ONLY = "allow_platform_only"
         const val KEY_ACCOUNTS = "accounts"
         const val MAX_ACCOUNTS = 200
     }

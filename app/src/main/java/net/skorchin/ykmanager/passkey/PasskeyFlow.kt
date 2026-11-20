@@ -156,6 +156,17 @@ class PasskeyFlow(
                         diag.put("request", PasskeyDiagnostics.summarizeRequest(raw, create))
                     }
 
+                    // Recheck here: the sheet entry may predate a settings change, or come
+                    // from a caller that skipped the provider query. Nothing touches the key yet.
+                    if (create && PasskeyJson.isPlatformOnly(raw) && !store.allowPlatformOnly) {
+                        runCatching { diag.put("note", YubiKeyPasskeyService.PLATFORM_ONLY_NOTE) }
+                        fatal("$rpId asked to save this passkey on the phone itself, not on a security key, " +
+                            "so nothing was written to your YubiKey. Choose another way to save it, or turn on " +
+                            "\"Offer the YubiKey when a site asks for a phone passkey\" in YK Manager > Passkeys " +
+                            "to try anyway (the site may still refuse it).", NotAllowedError())
+                        return@launch
+                    }
+
                     val normalized = if (create) PasskeyJson.normalizeCreate(raw)
                     else PasskeyJson.normalizeGet(raw, rpId).also { narrowToPreferred(it, preferredCredentialId) }
                     requestJson = normalized
@@ -405,7 +416,8 @@ class PasskeyFlow(
                     requestJson?.optString("challenge").orEmpty(), o)
             }
         }
-        val (json, mode) = PasskeyJson.finalizeResponse(raw, matched)
+        val attachment = if (isCreate) PasskeyJson.registrationAttachment(requestJson) else PasskeyJson.ATTACHMENT_PLATFORM
+        val (json, mode) = PasskeyJson.finalizeResponse(raw, matched, attachment)
         runCatching {
             diag.put("result", "returned to caller")
             diag.put("response", PasskeyDiagnostics.summarizeResponse(json, isCreate, mode))

@@ -53,8 +53,17 @@ class YubiKeyPasskeyService : CredentialProviderService() {
             callback.onResult(BeginCreateCredentialResponse())
             return
         }
-        val rp = runCatching { JSONObject(request.requestJson).optJSONObject("rp")?.optString("id") }.getOrNull()
-        recordAsked("create", request.callingAppInfo?.packageName, rp, null, 1, null)
+        val json = runCatching { JSONObject(request.requestJson) }.getOrNull()
+        val rp = json?.optJSONObject("rp")?.optString("id")
+        val caller = request.callingAppInfo?.packageName
+        // The site asked for a passkey built into the phone. A YubiKey is a
+        // roaming authenticator, so stay out of the sheet unless the user opted in.
+        if (PasskeyJson.isPlatformOnly(json) && !PasskeyStore(this).allowPlatformOnly) {
+            recordAsked("create", caller, rp, null, 0, PLATFORM_ONLY_NOTE)
+            callback.onResult(BeginCreateCredentialResponse())
+            return
+        }
+        recordAsked("create", caller, rp, null, 1, null)
         val entry = CreateEntry.Builder("YubiKey", pendingIntent(create = true, credentialId = null))
             .setDescription("Save this passkey on your YubiKey. Tap it on the phone or plug it in.")
             .setIcon(icon())
@@ -174,5 +183,7 @@ class YubiKeyPasskeyService : CredentialProviderService() {
 
     companion object {
         private val requestCodes = AtomicInteger((System.currentTimeMillis() % 100_000).toInt())
+        const val PLATFORM_ONLY_NOTE =
+            "site asked for a passkey stored on the phone (platform); YubiKey not offered"
     }
 }

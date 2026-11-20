@@ -2,6 +2,18 @@
 
 Each `## vX.Y` section is copied into the GitHub Release body by `.github/workflows/release.yml`.
 
+## v2.38 (versionCode 40)
+
+- Passkey registration now honors a site's choice of authenticator. When a site asks for a passkey
+  stored in the phone itself (authenticatorAttachment "platform"), YK Manager no longer appears in
+  Android's save sheet and nothing is written to the YubiKey. The check is repeated before the key is
+  used, so an old sheet entry can't bypass it
+- New option in Passkeys: "Offer the YubiKey when a site asks for a phone passkey" (off by default)
+  to try saving on the YubiKey anyway; the site may still refuse it
+- New passkeys are now reported as "cross-platform" (a roaming security key) instead of "platform",
+  except when the user answers a platform-only request with that option on. Sign-in responses are unchanged
+- The passkey log notes when a platform-only registration was skipped
+
 ## v2.37 (versionCode 39)
 
 - Full inventory (new screen): one read collects every application the key supports (device,
