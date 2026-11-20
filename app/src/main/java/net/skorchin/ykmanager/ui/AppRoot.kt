@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.AlertDialog
@@ -101,7 +100,6 @@ private fun Screen.icon(): ImageVector = when (this) {
     Screen.SLOTS -> Icons.Filled.Key
     Screen.OPENPGP -> Icons.Filled.Lock
     Screen.APPLICATIONS -> Icons.Filled.Apps
-    Screen.RESET -> Icons.Filled.RestartAlt
     Screen.RECIPES -> Icons.AutoMirrored.Filled.PlaylistAddCheck
     Screen.FINGERPRINTS -> Icons.Filled.Fingerprint
     Screen.INVENTORY -> Icons.AutoMirrored.Filled.ListAlt
@@ -231,7 +229,6 @@ fun AppRoot(vm: AppViewModel) {
                     Screen.SLOTS -> SlotsScreen(vm)
                     Screen.OPENPGP -> OpenPgpScreen(vm)
                     Screen.APPLICATIONS -> ApplicationsScreen(vm)
-                    Screen.RESET -> ResetScreen(vm)
                     Screen.RECIPES -> RecipesScreen(vm)
                     Screen.FINGERPRINTS -> FingerprintsScreen(vm)
                     Screen.INVENTORY -> InventoryScreen(vm)

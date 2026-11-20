@@ -81,6 +81,7 @@ fun SettingsScreen(vm: AppViewModel) {
             )
         }
         OtpOutputSection(out) { vm.settings.setOtpOutput(it) }
+        FactoryResetSection(vm)
     }
 }
 

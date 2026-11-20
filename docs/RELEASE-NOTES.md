@@ -4,6 +4,9 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
 
 ## Unreleased
 
+- Factory reset moved from the side menu to a "Factory reset" section at the bottom of Settings.
+  The reset cards and the typed RESET confirmation are unchanged
+
 ## v2.40 (versionCode 42)
 
 - Printed inventory reports now have a 0.75 in margin on all four sides. v2.39 set the margin

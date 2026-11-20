@@ -1,5 +1,6 @@
 package net.skorchin.ykmanager.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -103,7 +104,7 @@ fun HomeScreen(vm: AppViewModel) {
             Spacer(Modifier.height(6.dp))
             ButtonRow {
                 Screen.entries
-                    .filter { it != Screen.HOME && it != Screen.ABOUT && it != Screen.RESET && it != Screen.RECIPES && it.availableFor(k) }
+                    .filter { it != Screen.HOME && it != Screen.ABOUT && it != Screen.RECIPES && it.availableFor(k) }
                     .forEach { s -> SmallButton(s.title) { vm.navigate(s) } }
             }
         }
@@ -321,13 +322,15 @@ private fun LegacyModeSection(vm: AppViewModel, k: KeyInfo) {
 // Factory reset
 // ----------------------------------------------------------------------
 
+/** Shown as the last section of Settings (it used to be its own menu item). */
 @Composable
-fun ResetScreen(vm: AppViewModel) {
+fun FactoryResetSection(vm: AppViewModel) {
     var confirm by remember { mutableStateOf<String?>(null) }
     val info by vm.core.keyInfo.collectAsStateWithLifecycle()
     val k = info
     fun has(c: Capability) = k?.supports(c) ?: true
-    ScreenColumn {
+    SectionTitle("Factory reset")
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
             modifier = Modifier.fillMaxWidth(),
