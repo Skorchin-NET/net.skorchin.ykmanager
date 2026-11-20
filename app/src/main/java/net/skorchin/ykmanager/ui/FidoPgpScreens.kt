@@ -122,23 +122,23 @@ fun PasskeysScreen(vm: AppViewModel) {
     when (dialog) {
         FidoDialog.SET_PIN -> FormDialog(
             "Set FIDO2 PIN",
-            listOf(Field.Text("new", "New PIN", secret = true), Field.Text("rep", "Repeat PIN", secret = true)),
+            listOf(Field.Text("new", "New PIN", secret = true, pin = true), Field.Text("rep", "Repeat PIN", secret = true, pin = true)),
             "Set", onDismiss = { dialog = null },
         ) { v -> requireMatch(v, "new", "rep", st.minPinLength) ?: run { vm.fido.setPin(v.chars("new")); null } }
 
         FidoDialog.CHANGE_PIN -> FormDialog(
             "Change FIDO2 PIN",
             listOf(
-                Field.Text("cur", "Current PIN", secret = true),
-                Field.Text("new", "New PIN", secret = true),
-                Field.Text("rep", "Repeat PIN", secret = true),
+                Field.Text("cur", "Current PIN", secret = true, pin = true),
+                Field.Text("new", "New PIN", secret = true, pin = true),
+                Field.Text("rep", "Repeat PIN", secret = true, pin = true),
             ),
             "Change", onDismiss = { dialog = null },
         ) { v -> requireMatch(v, "new", "rep", st.minPinLength) ?: run { vm.fido.changePin(v.chars("cur"), v.chars("new")); null } }
 
         FidoDialog.UNLOCK -> FormDialog(
             "Unlock passkeys",
-            listOf(Field.Text("pin", "FIDO2 PIN", secret = true)),
+            listOf(Field.Text("pin", "FIDO2 PIN", secret = true, pin = true)),
             "Unlock", onDismiss = { dialog = null },
         ) { v -> vm.fido.unlock(v.chars("pin")); null }
 
@@ -152,7 +152,7 @@ fun PasskeysScreen(vm: AppViewModel) {
                             "Some older services that only support U2F may stop working."
                         else "Websites can again choose whether to ask for the PIN."
                     ),
-                    Field.Text("pin", "FIDO2 PIN", secret = true),
+                    Field.Text("pin", "FIDO2 PIN", secret = true, pin = true),
                 ),
                 if (enable) "Turn on" else "Turn off", onDismiss = { dialog = null },
             ) { v ->
@@ -169,7 +169,7 @@ fun PasskeysScreen(vm: AppViewModel) {
                 if (st.maxMinPinRpIds > 0) Field.Text("rp", "Websites allowed to read it (optional)",
                     supporting = "Comma-separated RP IDs, e.g. login.example.com (max ${st.maxMinPinRpIds})") else null,
                 Field.Check("force", "Require a PIN change before next use", st.forcePinChange),
-                Field.Text("pin", "Current FIDO2 PIN", secret = true),
+                Field.Text("pin", "Current FIDO2 PIN", secret = true, pin = true),
             ),
             "Apply", onDismiss = { dialog = null },
         ) { v ->
@@ -277,8 +277,8 @@ fun OpenPgpScreen(vm: AppViewModel) {
     }
 
     val pinFields = { cur: String, new: String ->
-        listOf(Field.Text("cur", cur, secret = true), Field.Text("new", new, secret = true),
-            Field.Text("rep", "Repeat", secret = true))
+        listOf(Field.Text("cur", cur, secret = true, pin = true), Field.Text("new", new, secret = true, pin = true),
+            Field.Text("rep", "Repeat", secret = true, pin = true))
     }
     when (dialog) {
         PgpDialog.USER_PIN -> FormDialog("Change PIN", pinFields("Current PIN", "New PIN (6+)"), "Change",
@@ -305,7 +305,7 @@ fun OpenPgpScreen(vm: AppViewModel) {
             "PIN retry counts",
             listOf(
                 Field.Note("Changing retry counts resets all PINs to their defaults (PIN 123456, admin 12345678) and removes the reset code."),
-                Field.Text("admin", "Admin PIN", secret = true),
+                Field.Text("admin", "Admin PIN", secret = true, pin = true),
                 Field.Text("u", "User PIN retries", "3", numeric = true),
                 Field.Text("r", "Reset code retries", "0", numeric = true),
                 Field.Text("a", "Admin PIN retries", "3", numeric = true),
@@ -326,7 +326,7 @@ fun OpenPgpScreen(vm: AppViewModel) {
             listOf(
                 Field.Choice("p", "Policy", options.map { uifName(it) }),
                 Field.Note("\"Fixed\" policies can never be changed again without resetting OpenPGP."),
-                Field.Text("admin", "Admin PIN", secret = true),
+                Field.Text("admin", "Admin PIN", secret = true, pin = true),
             ),
             "Apply", onDismiss = { touchFor = null },
         ) { v -> vm.pgp.setTouch(v.chars("admin"), ref, options[v.choice("p")]); null }

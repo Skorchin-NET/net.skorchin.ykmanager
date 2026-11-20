@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
@@ -41,7 +40,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,8 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import net.skorchin.ykmanager.ui.PinTextField
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CreatePublicKeyCredentialRequest
@@ -282,33 +279,26 @@ private fun PasskeySheet(flow: PasskeyFlow) {
 @RequiresApi(34)
 @Composable
 private fun PinFields(ui: PasskeyUi, pin: String, newPin: String, newPin2: String, flow: PasskeyFlow) {
-    val pinKeyboard = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
     val done = KeyboardActions(onDone = { flow.onContinue() })
     when (ui.pinMode) {
         PinMode.NONE -> return
-        PinMode.ENTER -> OutlinedTextField(
+        PinMode.ENTER -> PinTextField(
             value = pin, onValueChange = { flow.pin.value = it; flow.clearError() },
-            label = { Text("FIDO2 PIN") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(), keyboardOptions = pinKeyboard, keyboardActions = done,
+            label = "FIDO2 PIN", imeAction = ImeAction.Done, keyboardActions = done,
             modifier = Modifier.fillMaxWidth(),
         )
         PinMode.CHANGE, PinMode.SET_NEW -> {
-            if (ui.pinMode == PinMode.CHANGE) OutlinedTextField(
+            if (ui.pinMode == PinMode.CHANGE) PinTextField(
                 value = pin, onValueChange = { flow.pin.value = it; flow.clearError() },
-                label = { Text("Current PIN") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = pinKeyboard.copy(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
+                label = "Current PIN", imeAction = ImeAction.Next, modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            PinTextField(
                 value = newPin, onValueChange = { flow.newPin.value = it; flow.clearError() },
-                label = { Text("New PIN (at least ${ui.minPinLength})") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = pinKeyboard.copy(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(),
+                label = "New PIN (at least ${ui.minPinLength})", imeAction = ImeAction.Next, modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            PinTextField(
                 value = newPin2, onValueChange = { flow.newPinRepeat.value = it; flow.clearError() },
-                label = { Text("Repeat new PIN") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(), keyboardOptions = pinKeyboard, keyboardActions = done,
+                label = "Repeat new PIN", imeAction = ImeAction.Done, keyboardActions = done,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

@@ -13,6 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -167,6 +173,55 @@ fun SmallButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
 }
 
 // ----------------------------------------------------------------------
+// PIN entry
+// ----------------------------------------------------------------------
+
+/**
+ * Hidden text field for PINs, PUKs and reset codes. It opens the number keypad. YubiKey PINs
+ * may contain letters (FIDO2, PIV and OpenPGP all allow it), so the trailing button switches
+ * to the full keyboard for that field and back.
+ */
+@Composable
+fun PinTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    supporting: String? = null,
+    imeAction: ImeAction = ImeAction.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+) {
+    var letters by rememberSaveable { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = pinKeyboardType(letters),
+            autoCorrectEnabled = false,
+            imeAction = imeAction,
+        ),
+        keyboardActions = keyboardActions,
+        trailingIcon = {
+            IconButton(onClick = { letters = !letters }) {
+                Icon(
+                    if (letters) Icons.Filled.Dialpad else Icons.Filled.Keyboard,
+                    contentDescription = if (letters) "Use number keypad" else "Use letter keyboard",
+                )
+            }
+        },
+        supportingText = supporting?.let { s -> { Text(s) } },
+        modifier = modifier,
+    )
+}
+
+/** Number keypad by default; the full password keyboard once the user asks for letters. */
+fun pinKeyboardType(letters: Boolean): KeyboardType =
+    if (letters) KeyboardType.Password else KeyboardType.NumberPassword
+
+// ----------------------------------------------------------------------
 // Generic form dialog
 // ----------------------------------------------------------------------
 
@@ -178,6 +233,8 @@ sealed class Field(val key: String) {
         val secret: Boolean = false,
         val numeric: Boolean = false,
         val supporting: String? = null,
+        /** A PIN, PUK or reset code: hidden, opens the number keypad (see [PinTextField]). */
+        val pin: Boolean = false,
     ) : Field(key)
 
     class Check(key: String, val label: String, val initial: Boolean = false) : Field(key)
@@ -232,7 +289,13 @@ fun FormDialog(
             ) {
                 fields.forEach { f ->
                     when (f) {
-                        is Field.Text -> OutlinedTextField(
+                        is Field.Text -> if (f.pin) PinTextField(
+                            value = values[f.key].orEmpty(),
+                            onValueChange = { values[f.key] = it },
+                            label = f.label,
+                            supporting = f.supporting,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) else OutlinedTextField(
                             value = values[f.key].orEmpty(),
                             onValueChange = { values[f.key] = it },
                             label = { Text(f.label) },
