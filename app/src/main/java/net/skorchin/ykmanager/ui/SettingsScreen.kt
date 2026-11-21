@@ -24,20 +24,6 @@ import net.skorchin.ykmanager.yubi.NfcTapAction
 import net.skorchin.ykmanager.yubi.OtpOutputSettings
 import net.skorchin.ykmanager.yubi.OtpPacing
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Intent
-import android.os.Build
-import android.widget.Toast
-import net.skorchin.ykmanager.BuildConfig
-import net.skorchin.ykmanager.yubi.ConnectionLog
 
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
@@ -95,56 +81,9 @@ fun SettingsScreen(vm: AppViewModel) {
             )
         }
         OtpOutputSection(out) { vm.settings.setOtpOutput(it) }
-        ConnectionLogSection()
         FactoryResetSection(vm)
     }
 }
-
-/** Shows how the app saw the key arrive over USB and NFC, for troubleshooting. */
-@Composable
-private fun ConnectionLogSection() {
-    val context = LocalContext.current
-    var text by remember { mutableStateOf(ConnectionLog.snapshot()) }
-    SectionTitle("Connection log")
-    SectionCard {
-        Text(
-            "If the app does not notice your YubiKey over USB, or a tap opens a web page instead of the app, " +
-                "reproduce it, come back here and copy or share this log. It records only connection events " +
-                "(no one-time passwords, PINs or key contents) and is cleared when the app closes.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(Modifier.height(8.dp))
-        val recent = text.lines().takeLast(25).joinToString("\n")
-        Text(
-            if (recent.isBlank()) "(empty)" else recent,
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { text = ConnectionLog.snapshot() }) { Text("Refresh") }
-            OutlinedButton(onClick = {
-                val all = ConnectionLog.snapshot()
-                val cm = context.getSystemService(ClipboardManager::class.java)
-                cm?.setPrimaryClip(ClipData.newPlainText("YK Manager connection log", all))
-                Toast.makeText(context, "Connection log copied", Toast.LENGTH_SHORT).show()
-            }) { Text("Copy") }
-            OutlinedButton(onClick = {
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, "YK Manager connection log")
-                    putExtra(Intent.EXTRA_TEXT, deviceSummary() + "\n\n" + ConnectionLog.snapshot())
-                }
-                context.startActivity(Intent.createChooser(send, "Share connection log"))
-            }) { Text("Share") }
-        }
-        TextButton(onClick = { ConnectionLog.clear(); text = "" }) { Text("Clear") }
-    }
-}
-
-private fun deviceSummary(): String =
-    "YK Manager ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), Android ${Build.VERSION.RELEASE} " +
-        "(API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}"
 
 /**
  * The Settings tab of the Windows YubiKey Personalization Tool: output characters, delays,

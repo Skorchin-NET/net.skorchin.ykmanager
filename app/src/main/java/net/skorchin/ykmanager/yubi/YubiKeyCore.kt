@@ -2,13 +2,6 @@ package net.skorchin.ykmanager.yubi
 
 import android.app.Activity
 import android.app.Application
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbManager
 import com.yubico.yubikit.android.YubiKitManager
 import com.yubico.yubikit.android.transport.nfc.NfcConfiguration
 import com.yubico.yubikit.android.transport.nfc.NfcNotAvailable
@@ -193,20 +186,16 @@ class YubiKeyCore(app: Application) {
     fun startUsbDiscovery() {
         if (usbStarted) return
         usbStarted = true
-        ConnectionLog.add("USB: listening for YubiKeys")
         yubiKit.startUsbDiscovery(UsbConfiguration()) { device ->
-            ConnectionLog.add("USB: YubiKey connected (${device.usbDevice.productName ?: "pid 0x" + Integer.toHexString(device.usbDevice.productId)})")
             usbDevice = device
             // A passkey prompt over another app owns the key right now; don't compete for it.
             if (net.skorchin.ykmanager.passkey.PasskeyPromptState.active) {
-                ConnectionLog.add("USB: a passkey prompt owns the key; not reading it here")
                 _link.value = Link.USB
                 device.setOnClosed { if (usbDevice === device) { usbDevice = null; _link.value = Link.NONE; _keyInfo.value = null } }
                 return@startUsbDiscovery
             }
             _link.value = Link.USB
             device.setOnClosed {
-                ConnectionLog.add("USB: YubiKey disconnected")
                 if (usbDevice === device) {
                     usbDevice = null
                     _link.value = Link.NONE
@@ -225,66 +214,6 @@ class YubiKeyCore(app: Application) {
         }
     }
 
-    private var usbPermissionAskedFor: String? = null
-
-    /** Set by MainActivity; false while a system dialog (such as the USB permission prompt) is on top. */
-    @Volatile var appInFront = false
-
-    /**
-     * Called whenever the app comes to the front. If a YubiKey is plugged in but
-     * never reached the app (a missed attach broadcast, a permission answer that
-     * was lost, or a stale listener), restart USB discovery so it is picked up
-     * again, and ask for USB permission once if Android has not granted it.
-     */
-    fun checkUsb(context: Context) {
-        val um = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return
-        val keys = runCatching { um.deviceList.values.filter { it.vendorId == YUBICO_VID } }.getOrDefault(emptyList())
-        if (keys.isEmpty()) {
-            usbPermissionAskedFor = null
-            if (usbDevice != null) ConnectionLog.add("USB: app still had a key but none is plugged in")
-            return
-        }
-        for (d in keys) {
-            ConnectionLog.add("USB: Android sees ${d.productName ?: "YubiKey"} (pid 0x${Integer.toHexString(d.productId)}), " +
-                "permission ${if (um.hasPermission(d)) "granted" else "not granted"}, ${d.interfaceCount} interfaces")
-        }
-        if (usbDevice != null) return
-        ConnectionLog.add("USB: key is plugged in but the app has no connection; restarting USB discovery")
-        runCatching { yubiKit.stopUsbDiscovery() }.onFailure { ConnectionLog.add("USB: stop failed: ${describe(it)}") }
-        usbStarted = false
-        startUsbDiscovery()
-        val d = keys.first()
-        if (!um.hasPermission(d) && usbPermissionAskedFor != d.deviceName) {
-            usbPermissionAskedFor = d.deviceName
-            // Not on [scope]: if a key operation is stuck there, this must still run.
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (appInFront && usbDevice == null && !um.hasPermission(d)) requestUsbPermission(context.applicationContext, um, d)
-            }, 1500)
-        }
-    }
-
-    private fun requestUsbPermission(context: Context, um: UsbManager, d: UsbDevice) {
-        ConnectionLog.add("USB: asking Android for permission to use the key")
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context, i: Intent) {
-                runCatching { context.unregisterReceiver(this) }
-                val granted = um.hasPermission(d)
-                ConnectionLog.add("USB: permission ${if (granted) "granted" else "denied"}")
-                if (granted && usbDevice == null) {
-                    runCatching { yubiKit.stopUsbDiscovery() }
-                    usbStarted = false
-                    startUsbDiscovery()
-                }
-            }
-        }
-        val filter = IntentFilter(ACTION_USB_PERMISSION)
-        androidx.core.content.ContextCompat.registerReceiver(context, receiver, filter, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
-        val intent = Intent(ACTION_USB_PERMISSION).setPackage(context.packageName)
-        val flags = if (android.os.Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
-        runCatching { um.requestPermission(d, PendingIntent.getBroadcast(context, 1, intent, flags)) }
-            .onFailure { ConnectionLog.add("USB: permission request failed: ${describe(it)}"); runCatching { context.unregisterReceiver(receiver) } }
-    }
-
     /** True while this activity holds NFC reader mode (taps come to the app, not to the system). */
     @Volatile private var nfcArmed = false
 
@@ -297,7 +226,6 @@ class YubiKeyCore(app: Application) {
     val systemHandlesNfc: StateFlow<Boolean> = _systemHandlesNfc.asStateFlow()
 
     fun setSystemHandlesNfc(activity: Activity, on: Boolean) {
-        ConnectionLog.add(if (on) "NFC: handing taps to Android (OTP slots test switch)" else "NFC: test switch off; app takes taps again")
         _systemHandlesNfc.value = on
         if (on) stopNfcDiscovery(activity) else startNfcDiscovery(activity)
     }
@@ -311,21 +239,8 @@ class YubiKeyCore(app: Application) {
         if (!nfcArmed) startNfcDiscovery(activity)
     }
 
-    /**
-     * Re-acquire reader mode when the app starts waiting for a tap. If Android
-     * silently dropped it (after the camera scanner, a system sheet, ...), the
-     * tap would otherwise go to the system and open the key's my.yubico.com link.
-     */
-    fun rearmNfcForPrompt(activity: Activity) {
-        if (_systemHandlesNfc.value || usbDevice != null) return
-        ConnectionLog.add("NFC: waiting for a tap; re-arming reader mode")
-        runCatching { yubiKit.stopNfcDiscovery(activity) }
-        nfcArmed = false
-        startNfcDiscovery(activity)
-    }
-
     fun startNfcDiscovery(activity: Activity) {
-        if (_systemHandlesNfc.value) { ConnectionLog.add("NFC: not arming, OTP slots test switch is on"); return }
+        if (_systemHandlesNfc.value) return
         try {
             // skipNdefCheck: don't let Android read the NDEF record on every tap. It is slower,
             // makes the key emit an OTP for nothing, and is a path by which the system may act
@@ -333,28 +248,20 @@ class YubiKeyCore(app: Application) {
             yubiKit.startNfcDiscovery(NfcConfiguration().timeout(30_000).skipNdefCheck(true), activity) { onNfcTap(it) }
             nfcArmed = true
             _nfcAvailable.value = true
-            ConnectionLog.add("NFC: reader mode on")
         } catch (e: NfcNotAvailable) {
             nfcArmed = false
             _nfcAvailable.value = false
-            ConnectionLog.add(if (e.isDisabled) "NFC: turned off in Android settings" else "NFC: not available on this phone")
-        } catch (e: Exception) {
-            // Never crash over this; record it so the connection log shows why taps go to the system.
-            nfcArmed = false
-            ConnectionLog.add("NFC: could not turn reader mode on: ${describe(e)}")
         }
     }
 
     /** A tag delivered through an NFC intent rather than reader mode; treat it like a tap. */
     fun onNfcIntentTag(tag: android.nfc.Tag, ndefMessage: ByteArray?) {
-        ConnectionLog.add("NFC: tap arrived through Android's tag dispatch (reader mode was not holding it)")
         onNfcTap(NfcYubiKeyDevice(tag, 30_000, intentTagExecutor), ndefMessage)
     }
 
     private val intentTagExecutor: java.util.concurrent.ExecutorService = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     fun stopNfcDiscovery(activity: Activity) {
-        if (nfcArmed) ConnectionLog.add("NFC: reader mode off")
         nfcArmed = false
         runCatching { yubiKit.stopNfcDiscovery(activity) }
     }
@@ -373,8 +280,7 @@ class YubiKeyCore(app: Application) {
     var idleTapHandler: (suspend (NfcYubiKeyDevice, ByteArray?) -> Boolean)? = null
 
     private fun onNfcTap(device: NfcYubiKeyDevice, intentNdef: ByteArray? = null) {
-        if (usbDevice != null) { ConnectionLog.add("NFC: tap ignored, a USB key is connected"); return } // prefer USB
-        ConnectionLog.add("NFC: tap received${if (pending != null) " for \"${pending?.first}\"" else ""}")
+        if (usbDevice != null) return // prefer the USB key while one is attached
         nfcDevice = device
         val action = pending
         pending = null
@@ -447,7 +353,6 @@ class YubiKeyCore(app: Application) {
         val nfc = nfcDevice
         if (nfc == null) {
             pending = name to action
-            ConnectionLog.add("Waiting for an NFC tap to $name (no USB key connected)")
             _tapPrompt.value = "Hold your YubiKey against the back of the phone to $name."
             return
         }
@@ -492,15 +397,11 @@ class YubiKeyCore(app: Application) {
     }
 
     private fun launchJob(device: YubiKeyDevice, block: suspend () -> Unit) {
-        if (_busy.value) ConnectionLog.add("Key: waiting for the previous key operation to finish")
         scope.launch {
             _busy.value = true
-            val started = android.os.SystemClock.elapsedRealtime()
             try {
                 block()
             } finally {
-                val took = android.os.SystemClock.elapsedRealtime() - started
-                if (took > 15_000) ConnectionLog.add("Key: an operation took ${took / 1000} s")
                 _busy.value = false
                 _touchPrompt.value = false
             }
@@ -511,10 +412,8 @@ class YubiKeyCore(app: Application) {
         try {
             block()
         } catch (e: UserFacingException) {
-            ConnectionLog.add("Key: could not $name: ${e.message}")
             error(e.message ?: "Failed to $name")
         } catch (e: Throwable) {
-            ConnectionLog.add("Key: could not $name: ${describe(e)}")
             error("Failed to $name: ${describe(e)}")
         }
     }
@@ -718,9 +617,6 @@ class YubiKeyCore(app: Application) {
     fun showTouchPrompt(show: Boolean) { _touchPrompt.value = show }
 
     companion object {
-        private const val YUBICO_VID = 0x1050
-        private const val ACTION_USB_PERMISSION = "net.skorchin.ykmanager.USB_PERMISSION"
-
         fun describe(e: Throwable): String {
             val root = generateSequence(e) { it.cause }.last()
             val msg = (e.message?.takeIf { it.isNotBlank() } ?: root.message)

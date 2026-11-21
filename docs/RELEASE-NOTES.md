@@ -4,17 +4,6 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
 
 ## Unreleased
 
-- USB: when the app comes to the front and Android shows a YubiKey plugged in that the app
-  never connected to (missed attach, lost permission answer, stale listener), USB discovery is
-  restarted and, if needed, USB permission is requested once.
-- NFC: reader mode is re-acquired whenever the app shows "Scan your YubiKey", so the tap reaches
-  the app instead of Android opening the key's my.yubico.com link. Reader-mode failures no longer
-  pass silently.
-- A passkey-prompt flag left on after a passkey sheet closed no longer stops the main screen from
-  reading a USB key.
-- New Settings → Connection log: USB devices Android sees, permission state, reader mode on/off,
-  how each tap arrived and key operation errors. No OTPs, PINs or key contents. Copy or share it.
-
 ## v2.42 (versionCode 44)
 
 - PIN entry now opens the number keypad: FIDO2 PIN (including the passkey sign-in sheet),
