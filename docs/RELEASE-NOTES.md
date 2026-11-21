@@ -4,6 +4,8 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
 
 ## Unreleased
 
+## v2.43 (versionCode 48)
+
 - Accounts → QR from image now reads the picture with Google's ML Kit barcode reader (via Play
   services) first, which finds small codes in full-screen screenshots, codes with logos or rounded
   dots, and angled photos. The previous ZXing decoder remains the fallback. Decoding runs off the
