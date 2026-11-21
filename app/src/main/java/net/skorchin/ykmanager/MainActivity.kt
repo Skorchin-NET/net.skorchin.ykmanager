@@ -43,6 +43,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                // Whenever the app starts waiting for a tap, make sure it really holds reader mode,
+                // so the tap is not handed to Android (which opens the key's my.yubico.com link).
+                vm.core.tapPrompt.collect { prompt ->
+                    if (prompt != null && !prompt.startsWith("Unplug")) vm.core.rearmNfcForPrompt(this@MainActivity)
+                }
+            }
+        }
         handleNfcIntent(intent)
     }
 
@@ -75,7 +84,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        net.skorchin.ykmanager.yubi.ConnectionLog.add("App in front")
+        vm.core.appInFront = true
+        // A passkey sheet cannot be showing while this screen is in front; clear a flag it may have left behind.
+        if (net.skorchin.ykmanager.passkey.PasskeyPromptState.active) {
+            net.skorchin.ykmanager.yubi.ConnectionLog.add("Passkey prompt flag was left on; cleared")
+            net.skorchin.ykmanager.passkey.PasskeyPromptState.active = false
+        }
         vm.core.startNfcDiscovery(this)
+        vm.core.checkUsb(this)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -87,6 +104,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        vm.core.appInFront = false
         vm.core.stopNfcDiscovery(this)
         super.onPause()
     }
