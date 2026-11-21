@@ -17,12 +17,46 @@ import com.yubico.yubikit.oath.Base32
 import java.net.URLDecoder
 import java.net.URLEncoder
 import androidx.core.graphics.scale
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
+import java.util.concurrent.TimeUnit
 
 /** Decoding QR codes from images and turning their contents into otpauth:// URIs. */
 object QrCodes {
 
     /**
-     * Decode a QR code from an image the user picked. Tries several
+     * Find a QR code in an image the user picked. Must run off the main thread.
+     * Google's ML Kit reader (via Play services) is tried first: it copes with
+     * screenshots where the code is small, codes with logos or rounded modules,
+     * and photos at an angle. ZXing ([decodeImage]) is the fallback for phones
+     * without Play services or before its barcode module has downloaded.
+     * When the image holds several codes, an otpauth one is preferred.
+     */
+    fun findInImage(context: Context, uri: Uri): String? {
+        val viaMlKit = runCatching { mlKit(context, uri) }.getOrNull()
+        if (!viaMlKit.isNullOrBlank()) return viaMlKit
+        return decodeImage(context, uri)
+    }
+
+    private fun mlKit(context: Context, uri: Uri): String? {
+        val scanner = BarcodeScanning.getClient(
+            BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        )
+        try {
+            // fromFilePath applies the image's EXIF rotation.
+            val found = Tasks.await(scanner.process(InputImage.fromFilePath(context, uri)), 20, TimeUnit.SECONDS)
+            val values = found.mapNotNull { it.rawValue?.takeIf { v -> v.isNotBlank() } }
+            return values.firstOrNull { it.trim().startsWith("otpauth", ignoreCase = true) } ?: values.firstOrNull()
+        } finally {
+            scanner.close()
+        }
+    }
+
+    /**
+     * Decode a QR code from an image with ZXing. Tries several
      * binarizers, an inverted copy and a down-scaled copy, because screenshots
      * and photos of screens are often noisy or very large.
      */

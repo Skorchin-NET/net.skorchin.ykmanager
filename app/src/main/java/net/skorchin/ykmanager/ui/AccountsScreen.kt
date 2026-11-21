@@ -53,6 +53,10 @@ import com.journeyapps.barcodescanner.ScanOptions
 import com.yubico.yubikit.oath.HashAlgorithm
 import com.yubico.yubikit.oath.OathType
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberCoroutineScope
 
 private enum class AccDialog { ADD, URI, IMPORT, SET_PW, CHANGE_PW, REMOVE_PW, UNLOCK }
 
@@ -70,6 +74,7 @@ fun AccountsScreen(vm: AppViewModel) {
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(500) } }
 
     var importUris by remember { mutableStateOf<List<String>>(emptyList()) }
+    val uiScope = rememberCoroutineScope()
 
     fun handleScanned(text: String?) {
         if (text.isNullOrBlank()) return
@@ -90,14 +95,17 @@ fun AccountsScreen(vm: AppViewModel) {
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val text = try {
-            QrCodes.decodeImage(context, uri)
-        } catch (e: Exception) {
-            vm.core.error("Could not read the image: ${e.message ?: e.javaClass.simpleName}")
-            return@rememberLauncherForActivityResult
+        // Decoding a large image takes a moment: keep it off the main thread.
+        uiScope.launch {
+            val text = try {
+                withContext(Dispatchers.Default) { QrCodes.findInImage(context, uri) }
+            } catch (e: Exception) {
+                vm.core.error("Could not read the image: ${e.message ?: e.javaClass.simpleName}")
+                return@launch
+            }
+            if (text == null) vm.core.error("No QR code could be found in that image. Try a screenshot where the code is fully visible, or scan it with the camera.")
+            else handleScanned(text)
         }
-        if (text == null) vm.core.error("No QR code could be found in that image. Try a sharper or larger picture.")
-        else handleScanned(text)
     }
 
     fun startCameraScan() {
