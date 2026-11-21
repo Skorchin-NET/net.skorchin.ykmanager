@@ -126,6 +126,8 @@ dependencies {
     // QR code scanning for adding OATH accounts
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // Reading QR codes from picked images (screenshots, styled codes); ZXing is the fallback.
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
 
     // Jetpack Compose
     val composeBom = platform("androidx.compose:compose-bom:2026.09.00")

@@ -8,6 +8,9 @@ Each `## vX.Y` section is copied into the GitHub Release body by `.github/workfl
   services) first, which finds small codes in full-screen screenshots, codes with logos or rounded
   dots, and angled photos. The previous ZXing decoder remains the fallback. Decoding runs off the
   main thread, and an image with several codes prefers the otpauth one.
+- QR from image also reads photos taken of a monitor: when the first pass finds nothing, the
+  image is smoothed at a few strengths (removing the moiré a camera picks up from the screen's
+  pixel grid) and tried again, also with a white margin added for codes cropped to their edge.
 
 ## v2.42 (versionCode 44)
 

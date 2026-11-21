@@ -5,14 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.BinaryBitmap
-import com.google.zxing.DecodeHintType
-import com.google.zxing.LuminanceSource
-import com.google.zxing.MultiFormatReader
-import com.google.zxing.RGBLuminanceSource
-import com.google.zxing.common.GlobalHistogramBinarizer
-import com.google.zxing.common.HybridBinarizer
 import com.yubico.yubikit.oath.Base32
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -68,22 +60,17 @@ object QrCodes {
             val h = bmp.height
             val pixels = IntArray(w * h)
             bmp.getPixels(pixels, 0, w, 0, 0, w, h)
-            val source: LuminanceSource = RGBLuminanceSource(w, h, pixels)
-            for (src in listOf(source, source.invert())) {
-                for (binarizer in listOf({ HybridBinarizer(src) }, { GlobalHistogramBinarizer(src) })) {
-                    val text = runCatching {
-                        MultiFormatReader().apply {
-                            setHints(mapOf(
-                                DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
-                                DecodeHintType.TRY_HARDER to true,
-                            ))
-                        }.decodeWithState(BinaryBitmap(binarizer())).text
-                    }.getOrNull()
-                    if (!text.isNullOrBlank()) return text
-                }
-            }
+            QrDecode.decodeArgb(w, h, pixels)?.let { return it }
         }
-        return null
+        // Photos of a screen carry moiré and pixel-grid patterns that break the binarizer.
+        // Smooth a mid-sized copy and try again (also with a white margin added, for
+        // codes cropped right to their edge).
+        val base = scaled(bitmap, 1200) ?: bitmap
+        val w = base.width
+        val h = base.height
+        val pixels = IntArray(w * h)
+        base.getPixels(pixels, 0, w, 0, 0, w, h)
+        return QrDecode.decodeSmoothed(w, h, QrDecode.toGray(pixels))
     }
 
     private fun loadBitmap(context: Context, uri: Uri, maxSide: Int): Bitmap? {
