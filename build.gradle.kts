@@ -16,7 +16,7 @@ buildscript {
             classpath("org.bouncycastle:bcutil-jdk18on:1.87") { because("keep BouncyCastle modules aligned") }
             classpath("org.jdom:jdom2:2.0.6.1") { because("XXE fixed in 2.0.6.1") }
             classpath("org.bitbucket.b_c:jose4j:0.9.6") { because("GHSA fixed in 0.9.6") }
-            classpath("org.apache.commons:commons-lang3:3.18.0") { because("GHSA fixed in 3.18.0") }
+            classpath("org.apache.commons:commons-lang3:3.22.0") { because("GHSA fixed in 3.22.0") }
             classpath("org.apache.httpcomponents:httpclient:4.5.14") { because("GHSA fixed in 4.5.13") }
         }
     }
