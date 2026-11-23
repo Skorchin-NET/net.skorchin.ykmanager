@@ -48,11 +48,12 @@ A fix that only shows up on hardware after release goes into the next batch unle
 
 1. Rename `## Unreleased` in `docs/RELEASE-NOTES.md` to `## vX.Y (versionCode N)` (it becomes the release body) and add a fresh, empty `## Unreleased` above it.
 2. Bump `versionCode` (must increase on every Play upload) and `versionName` in `app/build.gradle.kts`.
-3. Commit, then tag and push:
+3. Open a pull request with those two changes (for example "Release v2.28"). `main` is protected (see below), so it can only be merged once the required checks pass. Squash-merge it, then tag the merged commit and push the tag:
 
    ```bash
+   git checkout main && git pull
    git tag v2.28
-   git push origin main v2.28
+   git push origin v2.28
    ```
 
 4. The **Release build** workflow verifies the tag equals `versionName`, builds, checks the signature and `applicationId`, and publishes a GitHub Release `v2.28` with:
@@ -63,6 +64,16 @@ A fix that only shows up on hardware after release goes into the next batch unle
    Tags containing a hyphen (e.g. `v2.28-rc1`) are published as pre-releases.
 
 A manual run (Actions → Release build → Run workflow) from any branch builds the same artifacts without creating a release unless *publish_release* is ticked.
+
+## Branch protection on `main`
+
+`main` only changes through pull requests. Branch protection requires:
+
+- a pull request for every change; no direct pushes, also for admins
+- passing checks: **Build & unit test**, **lint**, **semgrep** and **sca / osv-scan**
+- linear history (use squash or rebase merges); no force pushes or branch deletion
+
+No review approval is required, so a solo maintainer can merge their own pull request once the checks are green. Branches don't need to be up to date with `main` before merging. Tags are not affected, so pushing a release tag still triggers the **Release build** workflow.
 
 ## Optional: automatic Google Play upload
 
