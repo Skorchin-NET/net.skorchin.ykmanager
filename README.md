@@ -154,6 +154,13 @@ All YubiKey communication goes through `YubiKeyCore`, which runs it on a single-
 - Slot configurations cannot be read back out of the key: if you program a random Yubico OTP credential, save the parameters shown after programming if you intend to register them with a validation server.
 - See [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) for the security review and the scanners that run in CI.
 
+## Support the project
+
+YK Manager is free, with no ads or in-app purchases, and will stay that way. If it's
+useful to you, you can support development through
+[GitHub Sponsors](https://github.com/sponsors/Skorchin-NET). Sponsorship is entirely
+optional and doesn't unlock any features.
+
 ## Roadmap ideas
 
 - YubiHSM Auth
