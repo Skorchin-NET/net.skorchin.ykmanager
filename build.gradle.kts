@@ -10,7 +10,7 @@
 buildscript {
     dependencies {
         constraints {
-            classpath("com.google.guava:guava:33.7.2-jre") { because("GHSA fixed in 33.7.2") }
+            classpath("com.google.guava:guava:33.8.0-jre") { because("GHSA fixed in 33.7.2") }
             classpath("org.bouncycastle:bcprov-jdk18on:1.87") { because("GHSAs fixed in 1.85; matches the app") }
             classpath("org.bouncycastle:bcpkix-jdk18on:1.87") { because("GHSA fixed in 1.84; matches the app") }
             classpath("org.bouncycastle:bcutil-jdk18on:1.87") { because("keep BouncyCastle modules aligned") }
